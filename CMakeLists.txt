@@ -2084,6 +2084,12 @@ if(BUILD_stratoshark AND QT_FOUND)
 	unset(CMAKE_FOLDER)
 endif()
 
+if(BUILD_kitsune)
+	set(CMAKE_FOLDER "UI")
+	add_subdirectory( kitsune )
+	unset(CMAKE_FOLDER)
+endif()
+
 # Location of our plugins. {WIRESHARK,STRATOSHARK}_PLUGIN_DIR should allow
 # running from the build directory similar to DATAFILE_DIR above.
 # XXX - Do we need to set this is ENABLE_PLUGINS is OFF?
