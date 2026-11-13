@@ -85,6 +85,8 @@ target_link_libraries(kitsune PRIVATE
 	wiretap
 	epan
 	wsutil
+	# GetProcessMemoryInfo (PSAPI_VERSION=1) for the benchmark's memory figure
+	$<$<PLATFORM_ID:Windows>:psapi>
 )
 
 # Wireshark's C headers are not written for C++'s stricter warnings.

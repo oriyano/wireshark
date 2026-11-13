@@ -29,7 +29,10 @@ Follow the Wireshark Developer's Guide for Windows (Visual Studio 2022
 with the C++ workload, and the Qt Online Installer with
 "MSVC 2022 64-bit", "Qt 5 Compatibility Module" and "Qt Multimedia"),
 then configure with `-DBUILD_kitsune=ON` added to the usual CMake
-command line.
+command line. Visual Studio 2026 (MSVC 14.5x) also works with Qt's
+msvc2022_64 kit; it raises a new warning in upstream `wiretap/blf.c`, so
+add `-DENABLE_WERROR=OFF` until that is fixed upstream. After building,
+run `windeployqt --qmldir <source>/kitsune/qml run/kitsune.exe`.
 
 ## Command-line options
 

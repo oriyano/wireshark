@@ -77,7 +77,8 @@ QtObject {
         accentSoft:    Qt.tint(sys.base, Qt.rgba(sys.highlight.r, sys.highlight.g, sys.highlight.b, 0.18)),
         onAccent:      sys.highlightedText,
         selection:     Qt.tint(sys.base, Qt.rgba(sys.highlight.r, sys.highlight.g, sys.highlight.b, 0.28)),
-        rowAlt:        sys.alternateBase,
+        // Not sys.alternateBase: some platforms (Windows) make it a strong color.
+        rowAlt:        Qt.tint(sys.base, Qt.rgba(sys.windowText.r, sys.windowText.g, sys.windowText.b, 0.04)),
         success:       dark ? "#34d399" : "#059669",
         warning:       dark ? "#fbbf24" : "#b45309",
         danger:        dark ? "#f87171" : "#dc2626"
