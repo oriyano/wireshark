@@ -1,0 +1,556 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kitsune.invalid/schemas/fingerprints.schema.json",
+  "title": "Kitsune passive fingerprint data",
+  "description": "Schema for every JSON file in kitsune/data/fingerprints. The 'kind' field picks the file type.",
+  "oneOf": [
+    { "$ref": "#/$defs/labelsFile" },
+    { "$ref": "#/$defs/scoringFile" },
+    { "$ref": "#/$defs/signaturesFile" },
+    { "$ref": "#/$defs/testVectorsFile" }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*$"
+    },
+    "strength": {
+      "enum": ["definitive", "strong", "moderate", "weak", "hint"]
+    },
+    "source": {
+      "enum": ["ip_ttl", "tcp_syn", "dhcp_option55", "dhcp_vendor_class", "http_user_agent", "http_server", "ssh_banner", "smb_native_os", "ntlmssp_version"]
+    },
+    "regex": {
+      "type": "string",
+      "minLength": 1
+    },
+    "wildInt": {
+      "oneOf": [
+        { "type": "integer", "minimum": 0 },
+        { "const": "*" }
+      ]
+    },
+    "labelsFile": {
+      "type": "object",
+      "required": ["kind", "schema_version", "labels"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "labels"
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "labels": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "display", "parent", "family"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/id"
+              },
+              "display": {
+                "type": "string",
+                "minLength": 1
+              },
+              "parent": {
+                "oneOf": [
+                  { "$ref": "#/$defs/id" },
+                  { "type": "null" }
+                ]
+              },
+              "family": {
+                "enum": ["windows", "unix", "linux", "android", "apple", "bsd", "network"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "scoringFile": {
+      "type": "object",
+      "required": ["kind", "schema_version", "strengths", "sources", "conflict_penalty", "thresholds", "bands"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "scoring"
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "strengths": {
+          "type": "object",
+          "required": ["definitive", "strong", "moderate", "weak", "hint"],
+          "additionalProperties": false,
+          "patternProperties": {
+            ".*": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "sources": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/source"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "required": ["reliability", "spoofable", "why"],
+            "additionalProperties": false,
+            "properties": {
+              "reliability": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              },
+              "spoofable": {
+                "type": "boolean"
+              },
+              "why": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "conflict_penalty": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "thresholds": {
+          "type": "object",
+          "required": ["specific", "coarse"],
+          "additionalProperties": false,
+          "properties": {
+            "specific": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "coarse": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "bands": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "min"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "min": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "signaturesFile": {
+      "type": "object",
+      "required": ["kind", "source", "schema_version", "review_status", "signatures"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "signatures"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "review_status": {
+          "enum": ["draft", "reviewed"]
+        },
+        "description": {
+          "type": "string"
+        },
+        "signatures": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/signature"
+          }
+        },
+        "services": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/serviceRule"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "ip_ttl"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "signatures": {
+                "items": {
+                  "properties": {
+                    "match": { "$ref": "#/$defs/matchTtl" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "tcp_syn"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "signatures": {
+                "items": {
+                  "properties": {
+                    "match": { "$ref": "#/$defs/matchSyn" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "dhcp_option55"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "signatures": {
+                "items": {
+                  "properties": {
+                    "match": { "$ref": "#/$defs/matchOption55" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "enum": ["dhcp_vendor_class", "http_user_agent", "http_server", "ssh_banner"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "signatures": {
+                "items": {
+                  "properties": {
+                    "match": { "$ref": "#/$defs/matchPattern" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "smb_native_os"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "signatures": {
+                "items": {
+                  "properties": {
+                    "match": { "$ref": "#/$defs/matchSmb" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "ntlmssp_version"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "signatures": {
+                "items": {
+                  "properties": {
+                    "match": { "$ref": "#/$defs/matchNtlm" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "signature": {
+      "type": "object",
+      "required": ["id", "label", "strength", "match"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "$ref": "#/$defs/id"
+        },
+        "strength": {
+          "$ref": "#/$defs/strength"
+        },
+        "match": { "type": "object" },
+        "examples": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Observed values this signature must match, and match first. Required for regular-expression sources."
+        },
+        "detail": {
+          "type": "string",
+          "description": "Display text with {version} filled from the pattern's named group 'version'."
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "serviceRule": {
+      "type": "object",
+      "required": ["id", "pattern", "product"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "field": {
+          "type": "string",
+          "description": "Which observed field to match (default: the file's main field)."
+        },
+        "pattern": {
+          "$ref": "#/$defs/regex"
+        },
+        "product": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "matchTtl": {
+      "type": "object",
+      "required": ["initial_ttl"],
+      "additionalProperties": false,
+      "properties": {
+        "initial_ttl": {
+          "enum": [32, 64, 128, 255]
+        }
+      }
+    },
+    "matchSyn": {
+      "type": "object",
+      "required": ["initial_ttl", "df", "mss", "window", "options"],
+      "additionalProperties": false,
+      "properties": {
+        "initial_ttl": {
+          "enum": [32, 64, 128, 255]
+        },
+        "df": {
+          "oneOf": [
+            { "type": "boolean" },
+            { "const": "*" }
+          ]
+        },
+        "mss": {
+          "$ref": "#/$defs/wildInt"
+        },
+        "window": {
+          "oneOf": [
+            { "type": "integer", "minimum": 0, "maximum": 65535 },
+            { "type": "string", "pattern": "^mss\\*[1-9][0-9]*$" },
+            { "const": "*" }
+          ]
+        },
+        "wscale": {
+          "$ref": "#/$defs/wildInt"
+        },
+        "options": {
+          "type": "string",
+          "pattern": "^(mss|nop|ws|sok|sack|ts|eol|\\?[0-9]+)(,(mss|nop|ws|sok|sack|ts|eol|\\?[0-9]+))*$"
+        }
+      }
+    },
+    "matchOption55": {
+      "type": "object",
+      "required": ["option55"],
+      "additionalProperties": false,
+      "properties": {
+        "option55": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 254
+          }
+        }
+      }
+    },
+    "matchPattern": {
+      "type": "object",
+      "required": ["pattern"],
+      "additionalProperties": false,
+      "properties": {
+        "pattern": {
+          "$ref": "#/$defs/regex"
+        }
+      }
+    },
+    "matchSmb": {
+      "type": "object",
+      "required": ["native_os"],
+      "additionalProperties": false,
+      "properties": {
+        "native_os": {
+          "$ref": "#/$defs/regex"
+        },
+        "native_lanman": {
+          "$ref": "#/$defs/regex"
+        }
+      }
+    },
+    "matchNtlm": {
+      "type": "object",
+      "required": ["major", "minor"],
+      "additionalProperties": false,
+      "properties": {
+        "major": {
+          "$ref": "#/$defs/wildInt"
+        },
+        "minor": {
+          "$ref": "#/$defs/wildInt"
+        },
+        "build_min": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "build_max": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        }
+      }
+    },
+    "testVectorsFile": {
+      "type": "object",
+      "required": ["kind", "schema_version", "vectors"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "test_vectors"
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "vectors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "observations", "expect"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "observations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["source", "value"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "$ref": "#/$defs/source"
+                    },
+                    "value": {  }
+                  }
+                }
+              },
+              "expect": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "label": {
+                    "oneOf": [
+                      { "$ref": "#/$defs/id" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "band": {
+                    "type": "string"
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "matched": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/id"
+                    }
+                  },
+                  "services": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

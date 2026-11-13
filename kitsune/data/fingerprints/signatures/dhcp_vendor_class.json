@@ -1,0 +1,50 @@
+{
+  "kind": "signatures",
+  "source": "dhcp_vendor_class",
+  "schema_version": 1,
+  "review_status": "draft",
+  "description": "DHCP option 60 (Vendor Class Identifier), matched with a regular expression against the whole value. Signatures are tried in order and the first match wins.",
+  "signatures": [
+    {
+      "id": "dhcp60-msft",
+      "label": "windows",
+      "strength": "strong",
+      "match": { "pattern": "^MSFT 5\\.0$" },
+      "examples": ["MSFT 5.0"],
+      "notes": "Every Windows release since 2000."
+    },
+    {
+      "id": "dhcp60-android",
+      "label": "android",
+      "strength": "definitive",
+      "match": { "pattern": "^android-dhcp-(?P<version>\\d+)$" },
+      "examples": ["android-dhcp-14", "android-dhcp-10"],
+      "detail": "Android {version}",
+      "notes": "Android 10 and later put the major version in the vendor class."
+    },
+    {
+      "id": "dhcp60-dhcpcd-android",
+      "label": "android",
+      "strength": "moderate",
+      "match": { "pattern": "^dhcpcd-5\\.[25]\\.\\d+$" },
+      "examples": ["dhcpcd-5.5.6", "dhcpcd-5.2.10"],
+      "notes": "Android 4.x to 9 used dhcpcd 5.2 or 5.5 and sent only the bare dhcpcd version. Desktop dhcpcd builds append :OS-RELEASE:MACHINE:PLATFORM."
+    },
+    {
+      "id": "dhcp60-dhcpcd",
+      "label": "linux",
+      "strength": "moderate",
+      "match": { "pattern": "^dhcpcd-[\\d.]+" },
+      "examples": ["dhcpcd-9.4.1:Linux-6.1.21-v8+:aarch64:BCM2835"],
+      "notes": "Other dhcpcd builds (Raspberry Pi OS, Arch, Gentoo), which send dhcpcd-VERSION:OS-RELEASE:MACHINE:PLATFORM."
+    },
+    {
+      "id": "dhcp60-udhcp",
+      "label": "embedded-linux",
+      "strength": "strong",
+      "match": { "pattern": "^udhcp \\d" },
+      "examples": ["udhcp 1.36.1"],
+      "notes": "BusyBox udhcpc: routers, cameras and other embedded Linux."
+    }
+  ]
+}

@@ -1,0 +1,153 @@
+{
+  "kind": "signatures",
+  "source": "ssh_banner",
+  "schema_version": 1,
+  "review_status": "draft",
+  "description": "SSH identification string (RFC 4253 section 4.2) without the trailing CR LF, for example 'SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.10'. Use the banner the host sends as a server; a client banner says what the client runs and is also valid evidence for that host. OS signatures are tried in order and the first match wins. Distribution package versions pin a release because each release ships one OpenSSH version.",
+  "signatures": [
+    {
+      "id": "ssh-ubuntu-24.04",
+      "label": "ubuntu-24.04",
+      "strength": "strong",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_9\\.6p1 Ubuntu-3ubuntu" },
+      "examples": ["SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.5"]
+    },
+    {
+      "id": "ssh-ubuntu-22.04",
+      "label": "ubuntu-22.04",
+      "strength": "strong",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_8\\.9p1 Ubuntu-3ubuntu" },
+      "examples": ["SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.10"]
+    },
+    {
+      "id": "ssh-ubuntu-20.04",
+      "label": "ubuntu-20.04",
+      "strength": "strong",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_8\\.2p1 Ubuntu-4ubuntu" },
+      "examples": ["SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.11"]
+    },
+    {
+      "id": "ssh-ubuntu-18.04",
+      "label": "ubuntu-18.04",
+      "strength": "strong",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_7\\.6p1 Ubuntu-4ubuntu" },
+      "examples": ["SSH-2.0-OpenSSH_7.6p1 Ubuntu-4ubuntu0.7"]
+    },
+    {
+      "id": "ssh-ubuntu",
+      "label": "ubuntu",
+      "strength": "strong",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_\\S+ Ubuntu-" },
+      "examples": ["SSH-2.0-OpenSSH_9.9p1 Ubuntu-3ubuntu3"]
+    },
+    {
+      "id": "ssh-debian-12",
+      "label": "debian-12",
+      "strength": "strong",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_9\\.2p1 Debian-2" },
+      "examples": ["SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u3"]
+    },
+    {
+      "id": "ssh-debian-11",
+      "label": "debian-11",
+      "strength": "strong",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_8\\.4p1 Debian-5" },
+      "examples": ["SSH-2.0-OpenSSH_8.4p1 Debian-5+deb11u3"]
+    },
+    {
+      "id": "ssh-debian-10",
+      "label": "debian-10",
+      "strength": "strong",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_7\\.9p1 Debian-10" },
+      "examples": ["SSH-2.0-OpenSSH_7.9p1 Debian-10+deb10u4"]
+    },
+    {
+      "id": "ssh-raspbian",
+      "label": "debian",
+      "strength": "strong",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_\\S+ Raspbian-" },
+      "examples": ["SSH-2.0-OpenSSH_7.9p1 Raspbian-10+deb10u2"],
+      "notes": "Raspberry Pi OS, which is built from Debian."
+    },
+    {
+      "id": "ssh-debian",
+      "label": "debian",
+      "strength": "strong",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_\\S+ Debian-" },
+      "examples": ["SSH-2.0-OpenSSH_10.0p1 Debian-5"]
+    },
+    {
+      "id": "ssh-freebsd",
+      "label": "freebsd",
+      "strength": "strong",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_\\S+ FreeBSD" },
+      "examples": ["SSH-2.0-OpenSSH_9.7 FreeBSD-20240318"]
+    },
+    {
+      "id": "ssh-windows",
+      "label": "windows-nt10",
+      "strength": "strong",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_for_Windows_" },
+      "examples": ["SSH-2.0-OpenSSH_for_Windows_9.5"],
+      "notes": "The OpenSSH optional feature ships with Windows 10 1809+, 11 and Server 2019+."
+    },
+    {
+      "id": "ssh-routeros",
+      "label": "mikrotik-routeros",
+      "strength": "strong",
+      "match": { "pattern": "^SSH-2\\.0-ROSSSH" },
+      "examples": ["SSH-2.0-ROSSSH"]
+    },
+    {
+      "id": "ssh-cisco",
+      "label": "cisco-ios",
+      "strength": "moderate",
+      "match": { "pattern": "^SSH-(?:2\\.0|1\\.99)-Cisco-" },
+      "examples": ["SSH-2.0-Cisco-1.25", "SSH-1.99-Cisco-1.25"],
+      "notes": "Cisco IOS and IOS XE. ASA and some other Cisco platforms send the same string."
+    },
+    {
+      "id": "ssh-dropbear",
+      "label": "embedded-linux",
+      "strength": "moderate",
+      "match": { "pattern": "^SSH-2\\.0-dropbear" },
+      "examples": ["SSH-2.0-dropbear_2022.83"],
+      "notes": "Dropbear is used on routers, OpenWrt and other embedded Linux."
+    },
+    {
+      "id": "ssh-rhel-9",
+      "label": "rhel-family",
+      "strength": "weak",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_8\\.7$" },
+      "examples": ["SSH-2.0-OpenSSH_8.7"],
+      "notes": "RHEL 9 and rebuilds ship OpenSSH 8.7 with no package suffix. Other systems built from 8.7 send the same."
+    },
+    {
+      "id": "ssh-rhel-8",
+      "label": "rhel-family",
+      "strength": "weak",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_8\\.0$" },
+      "examples": ["SSH-2.0-OpenSSH_8.0"],
+      "notes": "RHEL 8 and rebuilds ship OpenSSH 8.0 with no package suffix."
+    },
+    {
+      "id": "ssh-openssh-plain",
+      "label": "unix-like",
+      "strength": "hint",
+      "match": { "pattern": "^SSH-2\\.0-OpenSSH_[\\d.]+(?:p\\d+)?$" },
+      "examples": ["SSH-2.0-OpenSSH_9.8", "SSH-2.0-OpenSSH_9.9p1"],
+      "notes": "OpenSSH with no distribution suffix: RHEL family, macOS, Alpine, Arch, OpenBSD, and others."
+    }
+  ],
+  "services": [
+    { "id": "svc-openssh-windows", "pattern": "^SSH-[\\d.]+-OpenSSH_for_Windows_(?P<version>[\\w.]+)", "product": "OpenSSH for Windows" },
+    { "id": "svc-openssh", "pattern": "^SSH-[\\d.]+-OpenSSH_(?P<version>[\\w.]+)", "product": "OpenSSH" },
+    { "id": "svc-dropbear", "pattern": "^SSH-[\\d.]+-dropbear(?:_(?P<version>[\\w.]+))?", "product": "Dropbear SSH" },
+    { "id": "svc-libssh", "pattern": "^SSH-[\\d.]+-libssh[_-](?P<version>[\\w.]+)", "product": "libssh" },
+    { "id": "svc-cisco", "pattern": "^SSH-[\\d.]+-Cisco-(?P<version>[\\w.]+)", "product": "Cisco SSH" },
+    { "id": "svc-routeros", "pattern": "^SSH-[\\d.]+-ROSSSH", "product": "MikroTik RouterOS SSH" },
+    { "id": "svc-putty", "pattern": "^SSH-[\\d.]+-PuTTY_(?P<version>[\\w.:-]+)", "product": "PuTTY" },
+    { "id": "svc-paramiko", "pattern": "^SSH-[\\d.]+-paramiko_(?P<version>[\\w.]+)", "product": "Paramiko" },
+    { "id": "svc-go", "pattern": "^SSH-[\\d.]+-Go$", "product": "Go x/crypto/ssh" }
+  ]
+}

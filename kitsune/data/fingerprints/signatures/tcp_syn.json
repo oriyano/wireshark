@@ -1,0 +1,103 @@
+{
+  "kind": "signatures",
+  "source": "tcp_syn",
+  "schema_version": 1,
+  "review_status": "draft",
+  "description": "TCP SYN layout of the connecting host: initial TTL, DF bit, MSS, window, window scale and the order of TCP options. See README.md 'TCP SYN matching' for the notation. Signatures are tried in order and the first match wins.",
+  "signatures": [
+    {
+      "id": "syn-win-nt10",
+      "label": "windows-nt10",
+      "strength": "strong",
+      "match": { "initial_ttl": 128, "df": true, "mss": "*", "window": 64240, "wscale": 8, "options": "mss,nop,ws,nop,nop,sok" },
+      "notes": "Windows 10, 11 and Server 2016 and later on Ethernet (MSS 1460). Client and server versions send the same SYN."
+    },
+    {
+      "id": "syn-win-8",
+      "label": "windows-legacy",
+      "strength": "moderate",
+      "match": { "initial_ttl": 128, "df": true, "mss": "*", "window": 8192, "wscale": 8, "options": "mss,nop,ws,nop,nop,sok" },
+      "notes": "Windows 8, 8.1 and Server 2012 (R2)."
+    },
+    {
+      "id": "syn-win-7",
+      "label": "windows-legacy",
+      "strength": "moderate",
+      "match": { "initial_ttl": 128, "df": true, "mss": "*", "window": 8192, "wscale": 2, "options": "mss,nop,ws,nop,nop,sok" },
+      "notes": "Windows Vista, 7 and Server 2008 (R2)."
+    },
+    {
+      "id": "syn-win-nt10-mss",
+      "label": "windows-nt10",
+      "strength": "moderate",
+      "match": { "initial_ttl": 128, "df": true, "mss": "*", "window": "*", "wscale": 8, "options": "mss,nop,ws,nop,nop,sok" },
+      "notes": "Same layout with a window other than 64240, which is what a smaller MSS (VPN, PPPoE) or autotuning produces."
+    },
+    {
+      "id": "syn-win-xp",
+      "label": "windows-xp",
+      "strength": "moderate",
+      "match": { "initial_ttl": 128, "df": true, "mss": "*", "window": "*", "options": "mss,nop,nop,sok" },
+      "notes": "Windows XP and Server 2003 send no window scale option. The window is usually 65535 or 64240."
+    },
+    {
+      "id": "syn-linux-modern-64240",
+      "label": "linux",
+      "strength": "strong",
+      "detail": "Linux 4.x or later kernel",
+      "match": { "initial_ttl": 64, "df": true, "mss": "*", "window": 64240, "wscale": "*", "options": "mss,sok,ts,nop,ws" },
+      "notes": "Recent Linux kernels (and Android, ChromeOS) with MSS 1460. Window scale is usually 7 but depends on memory."
+    },
+    {
+      "id": "syn-linux-modern-mss20",
+      "label": "linux",
+      "strength": "strong",
+      "detail": "Linux 3.x or 4.x kernel",
+      "match": { "initial_ttl": 64, "df": true, "mss": "*", "window": "mss*20", "wscale": "*", "options": "mss,sok,ts,nop,ws" },
+      "notes": "Linux 3.x and 4.x: initial window of 10 segments, advertised as 20 x MSS (29200 for MSS 1460)."
+    },
+    {
+      "id": "syn-linux-legacy",
+      "label": "linux",
+      "strength": "moderate",
+      "detail": "Linux 2.6 kernel",
+      "match": { "initial_ttl": 64, "df": true, "mss": "*", "window": "mss*4", "wscale": "*", "options": "mss,sok,ts,nop,ws" },
+      "notes": "Linux 2.6: 4 x MSS (5840 for MSS 1460). Still seen on old embedded devices."
+    },
+    {
+      "id": "syn-linux-generic",
+      "label": "linux",
+      "strength": "moderate",
+      "match": { "initial_ttl": 64, "df": true, "mss": "*", "window": "*", "wscale": "*", "options": "mss,sok,ts,nop,ws" },
+      "notes": "Linux option order with a tuned or unusual window."
+    },
+    {
+      "id": "syn-apple",
+      "label": "apple",
+      "strength": "strong",
+      "match": { "initial_ttl": 64, "df": true, "mss": "*", "window": 65535, "wscale": "*", "options": "mss,nop,ws,nop,nop,ts,sok,eol" },
+      "notes": "macOS and iOS (XNU). Window scale is 6 on current releases, lower on old ones. macOS and iOS cannot be told apart from the SYN."
+    },
+    {
+      "id": "syn-freebsd",
+      "label": "freebsd",
+      "strength": "moderate",
+      "match": { "initial_ttl": 64, "df": true, "mss": "*", "window": 65535, "wscale": "*", "options": "mss,nop,ws,sok,ts" },
+      "notes": "FreeBSD 9 and later, and appliances built on it (pfSense, OPNsense, TrueNAS)."
+    },
+    {
+      "id": "syn-openbsd",
+      "label": "openbsd",
+      "strength": "moderate",
+      "match": { "initial_ttl": 64, "df": true, "mss": "*", "window": 16384, "wscale": "*", "options": "mss,nop,nop,sok,nop,ws,nop,nop,ts" },
+      "notes": "OpenBSD."
+    },
+    {
+      "id": "syn-cisco-ios",
+      "label": "cisco-ios",
+      "strength": "moderate",
+      "match": { "initial_ttl": 255, "df": "*", "mss": "*", "window": 4128, "options": "mss" },
+      "notes": "Connections opened by Cisco IOS itself (for example to a TACACS+ or syslog-over-TCP server)."
+    }
+  ]
+}
