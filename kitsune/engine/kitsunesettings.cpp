@@ -28,8 +28,43 @@ void KitsuneSettings::setThemeMode(int mode)
         return;
     }
     theme_mode_ = mode;
-    settings_.setValue(QStringLiteral("ui/themeMode"), mode);
+    if (save_theme_) {
+        settings_.setValue(QStringLiteral("ui/themeMode"), mode);
+    }
     emit themeModeChanged();
+}
+
+void KitsuneSettings::setThemeModeForSession(int mode)
+{
+    save_theme_ = false;
+    setThemeMode(mode);
+}
+
+static QString subnetKey(const QString &cidr)
+{
+    /* QSettings treats '/' as a group separator. */
+    QString key = cidr;
+    key.replace(QLatin1Char('/'), QLatin1Char('_'));
+    return QStringLiteral("subnetNames/") + key;
+}
+
+QString KitsuneSettings::subnetName(const QString &cidr) const
+{
+    return settings_.value(subnetKey(cidr)).toString();
+}
+
+void KitsuneSettings::setSubnetName(const QString &cidr, const QString &name)
+{
+    const QString trimmed = name.trimmed();
+    if (trimmed == subnetName(cidr)) {
+        return;
+    }
+    if (trimmed.isEmpty()) {
+        settings_.remove(subnetKey(cidr));
+    } else {
+        settings_.setValue(subnetKey(cidr), trimmed);
+    }
+    emit subnetNamesChanged();
 }
 
 bool KitsuneSettings::systemPrefersDark() const

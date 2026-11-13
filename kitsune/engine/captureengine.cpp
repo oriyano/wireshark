@@ -1,6 +1,6 @@
 /* captureengine.cpp
  *
- * Kitsune - a QML interface on top of the Wireshark engine.
+ * Kitsune - the GUI's handle on the dissection engine.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -8,8 +8,10 @@
 #include "config.h"
 
 #include "captureengine.h"
+#include "engineworker.h"
 
 #include <QElapsedTimer>
+#include <QEventLoop>
 #include <QFileInfo>
 #include <QLocale>
 #include <QMetaObject>
@@ -17,15 +19,11 @@
 #include <glib.h>
 
 #include <app/application_flavor.h>
-#include <epan/addr_resolv.h>
 #include <epan/column.h>
 #include <epan/epan.h>
-#include <epan/epan_dissect.h>
-#include <epan/frame_data_sequence.h>
-#include <epan/packet.h>
 #include <epan/prefs.h>
-#include <epan/secrets.h>
 #include <epan/timestamp.h>
+#include <epan/cfile.h>
 #include <ui/failure_message.h>
 #include <wiretap/wtap.h>
 #include <wsutil/filesystem.h>
@@ -107,46 +105,41 @@ void CaptureEngine::cleanupLibraries()
     libraries_ready = false;
 }
 
-static epan_t *kitsune_epan_new(capture_file *cf)
-{
-    static const struct packet_provider_funcs funcs = {
-        cap_file_provider_get_frame_ts,
-        cap_file_provider_get_start_ts,
-        cap_file_provider_get_end_ts,
-        cap_file_provider_get_interface_name,
-        cap_file_provider_get_interface_description,
-        cap_file_provider_get_modified_block,
-        cap_file_provider_get_process_id,
-        cap_file_provider_get_process_name,
-        cap_file_provider_get_process_uuid,
-        cap_file_provider_get_process_path,
-        cap_file_provider_get_process_cmdline,
-        cap_file_provider_get_process_parent_id,
-        cap_file_provider_get_process_user_id,
-        cap_file_provider_get_process_user_name,
-        cap_file_provider_get_process_start_time,
-        cap_file_provider_find_process_info,
-    };
-
-    return epan_new(&cf->provider, &funcs);
-}
-
 CaptureEngine::CaptureEngine(QObject *parent) :
     QObject(parent),
-    cf_(&cfile),
-    load_thread_(nullptr),
-    cancel_load_(false),
-    loading_(false),
-    load_progress_(0.0),
-    packet_count_(0),
-    load_time_ms_(0),
-    file_size_(0)
+    worker_(new EngineWorker)
 {
+    qRegisterMetaType<PacketRow>();
+    qRegisterMetaType<QVector<PacketRow>>();
+    qRegisterMetaType<PacketDetails>();
+    qRegisterMetaType<HostInventorySnapshot>();
+    qRegisterMetaType<QVector<quint32>>();
+
+    thread_.setObjectName(QStringLiteral("Kitsune engine"));
+    worker_->moveToThread(&thread_);
+    connect(&thread_, &QThread::finished, worker_, &QObject::deleteLater);
+
+    connect(worker_, &EngineWorker::opened, this, &CaptureEngine::onOpened);
+    connect(worker_, &EngineWorker::openFailed, this, &CaptureEngine::onOpenFailed);
+    connect(worker_, &EngineWorker::loadProgress, this, &CaptureEngine::onLoadProgress);
+    connect(worker_, &EngineWorker::loaded, this, &CaptureEngine::onLoaded);
+    connect(worker_, &EngineWorker::inventoryReady, this, &CaptureEngine::onInventoryReady);
+    connect(worker_, &EngineWorker::rowsReady, this, &CaptureEngine::onRowsReady);
+    connect(worker_, &EngineWorker::detailsReady, this, &CaptureEngine::onDetailsReady);
+    connect(worker_, &EngineWorker::filterChecked, this, &CaptureEngine::onFilterChecked);
+    connect(worker_, &EngineWorker::filterProgress, this, &CaptureEngine::onFilterProgress);
+    connect(worker_, &EngineWorker::filterApplied, this, &CaptureEngine::onFilterApplied);
+    connect(worker_, &EngineWorker::filterFailed, this, &CaptureEngine::onFilterFailed);
+
+    thread_.start();
 }
 
 CaptureEngine::~CaptureEngine()
 {
-    closeFile();
+    worker_->cancel = true;
+    QMetaObject::invokeMethod(worker_, "closeFile", Qt::BlockingQueuedConnection);
+    thread_.quit();
+    thread_.wait();
 }
 
 QString CaptureEngine::fileName() const
@@ -161,7 +154,7 @@ QString CaptureEngine::formatCount(qint64 value) const
 
 int CaptureEngine::columnCount() const
 {
-    return static_cast<int>(cf_->cinfo.num_cols);
+    return static_cast<int>(cfile.cinfo.num_cols);
 }
 
 QString CaptureEngine::columnTitle(int column) const
@@ -180,206 +173,36 @@ bool CaptureEngine::openFile(const QUrl &url)
 bool CaptureEngine::openPath(const QString &path)
 {
     closeFile();
-
-    int err = 0;
-    char *err_info = nullptr;
-    QByteArray native_path = path.toUtf8();
-    wtap *wth = wtap_open_offline(native_path.constData(), WTAP_TYPE_AUTO, &err, &err_info, true,
-                                  application_configuration_environment_prefix());
-    if (!wth) {
-        last_error_ = tr("Couldn't open %1: %2").arg(QFileInfo(path).fileName(),
-                                                     QString::fromUtf8(wtap_strerror(err)));
-        if (err_info) {
-            last_error_ += QStringLiteral(" (%1)").arg(QString::fromUtf8(err_info));
-            g_free(err_info);
-        }
-        emit errorOccurred(last_error_);
-        return false;
-    }
-
-    cf_->provider.wth = wth;
-    cf_->filename = g_strdup(native_path.constData());
-    cf_->is_tempfile = false;
-    cf_->unsaved_changes = false;
-    cf_->f_datalen = 0;
-    cf_->cd_t = wtap_file_type_subtype(wth);
-    cf_->open_type = WTAP_TYPE_AUTO;
-    cf_->count = 0;
-    cf_->drops_known = false;
-    cf_->drops = 0;
-    cf_->snap = wtap_snapshot_length(wth);
-    nstime_set_zero(&cf_->elapsed_time);
-    cf_->provider.ref = nullptr;
-    cf_->provider.prev_dis = nullptr;
-    cf_->provider.prev_cap = nullptr;
-    cf_->cum_bytes = 0;
-    cf_->provider.frames = new_frame_data_sequence();
-    cf_->epan = kitsune_epan_new(cf_);
-    cf_->state = FILE_READ_IN_PROGRESS;
-
-    wtap_set_cb_new_ipv4(wth, add_ipv4_name);
-    wtap_set_cb_new_ipv6(wth, (wtap_new_ipv6_callback_t) add_ipv6_name);
-    wtap_set_cb_new_secrets(wth, secrets_wtap_callback);
-
-    err = 0;
-    file_size_ = wtap_file_size(wth, &err);
-    file_type_name_ = QString::fromUtf8(wtap_file_type_subtype_description(cf_->cd_t));
+    file_generation_++;
     file_path_ = path;
-    last_error_.clear();
-    packet_count_ = 0;
-    duration_.clear();
-    load_time_ms_ = 0;
-    emit fileChanged();
-    emit packetCountChanged();
-
     loading_ = true;
-    cancel_load_ = false;
-    setProgress(0.0);
+    load_progress_ = 0.0;
+    last_error_.clear();
+    emit fileChanged();
     emit loadingChanged();
-
-    load_thread_ = QThread::create([this]() { runFirstPass(); });
-    load_thread_->start();
+    emit loadProgressChanged();
+    QMetaObject::invokeMethod(worker_, "openFile", Qt::QueuedConnection, Q_ARG(QString, path), Q_ARG(int, file_generation_));
     return true;
-}
-
-/* Worker thread. Sequential read of the whole file, building the frame
- * table. No GUI-thread code touches epan until onLoadFinished runs. */
-void CaptureEngine::runFirstPass()
-{
-    QElapsedTimer timer;
-    timer.start();
-
-    int err = 0;
-    char *err_info = nullptr;
-    int64_t data_offset = 0;
-    wtap_rec rec;
-    static frame_data ref_frame;
-
-    /* A tree is only needed if postdissectors ask for fields. */
-    epan_dissect_t *edt = epan_dissect_new(cf_->epan, postdissectors_want_hfids(), false);
-    wtap_rec_init(&rec, 2048);
-
-    qint64 last_report = 0;
-    while (!cancel_load_ && wtap_read(cf_->provider.wth, &rec, &err, &err_info, &data_offset)) {
-        frame_data fdlocal;
-        frame_data_init(&fdlocal, cf_->count + 1, &rec, data_offset, cf_->cum_bytes);
-        frame_data_set_before_dissect(&fdlocal, &cf_->elapsed_time, &cf_->provider.ref, cf_->provider.prev_dis);
-        if (cf_->provider.ref == &fdlocal) {
-            ref_frame = fdlocal;
-            cf_->provider.ref = &ref_frame;
-        }
-
-        epan_dissect_run(edt, cf_->cd_t, &rec, &fdlocal, NULL);
-
-        frame_data_set_after_dissect(&fdlocal, &cf_->cum_bytes);
-        cf_->provider.prev_cap = cf_->provider.prev_dis =
-            frame_data_sequence_add(cf_->provider.frames, &fdlocal);
-        cf_->count++;
-        epan_dissect_reset(edt);
-        wtap_rec_reset(&rec);
-
-        qint64 now = timer.elapsed();
-        if (now - last_report >= 100) {
-            last_report = now;
-            double progress = file_size_ > 0 ?
-                static_cast<double>(wtap_read_so_far(cf_->provider.wth)) / static_cast<double>(file_size_) : 0.0;
-            int count = static_cast<int>(cf_->count);
-            QMetaObject::invokeMethod(this, [this, progress, count]() {
-                setProgress(progress);
-                packet_count_ = count;
-                emit packetCountChanged();
-            }, Qt::QueuedConnection);
-        }
-    }
-
-    epan_dissect_free(edt);
-    wtap_rec_cleanup(&rec);
-    wtap_sequential_close(cf_->provider.wth);
-    postseq_cleanup_all_protocols();
-    cf_->provider.prev_dis = nullptr;
-    cf_->provider.prev_cap = nullptr;
-
-    QString err_message;
-    if (err != 0) {
-        err_message = QString::fromUtf8(wtap_strerror(err));
-        if (err_info) {
-            err_message += QStringLiteral(" (%1)").arg(QString::fromUtf8(err_info));
-        }
-    }
-    g_free(err_info);
-
-    qint64 elapsed = timer.elapsed();
-    QMetaObject::invokeMethod(this, "onLoadFinished", Qt::QueuedConnection,
-                              Q_ARG(int, err), Q_ARG(QString, err_message), Q_ARG(qint64, elapsed));
-}
-
-void CaptureEngine::onLoadFinished(int err, const QString &err_message, qint64 elapsed_ms)
-{
-    if (load_thread_) {
-        load_thread_->wait();
-        delete load_thread_;
-        load_thread_ = nullptr;
-    }
-
-    cf_->state = FILE_READ_DONE;
-    packet_count_ = static_cast<int>(cf_->count);
-    load_time_ms_ = elapsed_ms;
-
-    if (cf_->count > 0) {
-        frame_data *first = frame_data_sequence_find(cf_->provider.frames, 1);
-        frame_data *last = frame_data_sequence_find(cf_->provider.frames, cf_->count);
-        if (first && last) {
-            qint64 secs = last->abs_ts.secs - first->abs_ts.secs;
-            if (secs < 0) secs = 0;
-            duration_ = QStringLiteral("%1:%2:%3")
-                .arg(secs / 3600, 2, 10, QLatin1Char('0'))
-                .arg((secs / 60) % 60, 2, 10, QLatin1Char('0'))
-                .arg(secs % 60, 2, 10, QLatin1Char('0'));
-        }
-    }
-
-    loading_ = false;
-    setProgress(1.0);
-    emit packetCountChanged();
-    emit loadingChanged();
-    emit loaded();
-
-    if (err != 0) {
-        last_error_ = tr("The file was only partly read: %1").arg(err_message);
-        emit errorOccurred(last_error_);
-    }
 }
 
 void CaptureEngine::closeFile()
 {
-    if (load_thread_) {
-        cancel_load_ = true;
-        load_thread_->wait();
-        delete load_thread_;
-        load_thread_ = nullptr;
-    }
+    worker_->cancel = true;
+    file_generation_++;
+    filter_generation_++;
+    QMetaObject::invokeMethod(worker_, "closeFile", Qt::QueuedConnection);
 
-    if (cf_->provider.wth) {
-        wtap_close(cf_->provider.wth);
-        cf_->provider.wth = nullptr;
-    }
-    if (cf_->provider.frames) {
-        free_frame_data_sequence(cf_->provider.frames);
-        cf_->provider.frames = nullptr;
-    }
-    if (cf_->epan) {
-        epan_free(cf_->epan);
-        cf_->epan = nullptr;
-    }
-    g_free(cf_->filename);
-    cf_->filename = nullptr;
-    cf_->count = 0;
-    cf_->state = FILE_CLOSED;
-
-    bool had_file = !file_path_.isEmpty();
+    const bool had_file = !file_path_.isEmpty();
     file_path_.clear();
+    file_type_name_.clear();
     packet_count_ = 0;
     duration_.clear();
+    displayed_.clear();
+    filter_text_.clear();
+    applied_filter_text_.clear();
+    filtering_ = false;
+    selected_frame_ = 0;
+    inventory_ = HostInventorySnapshot();
     if (loading_) {
         loading_ = false;
         emit loadingChanged();
@@ -387,56 +210,217 @@ void CaptureEngine::closeFile()
     if (had_file) {
         emit fileChanged();
         emit packetCountChanged();
+        emit displayedFramesChanged();
+        emit filterChanged();
+        emit selectedFrameChanged();
+        emit inventoryChanged();
     }
 }
 
-bool CaptureEngine::dissectColumns(uint32_t frame_num, QStringList &columns)
+void CaptureEngine::onOpened(const QString &path, const QString &file_type, qint64, int generation)
 {
-    if (loading_ || !cf_->provider.frames || frame_num == 0 || frame_num > cf_->count) {
-        return false;
+    if (generation != file_generation_ || path != file_path_) {
+        return;
     }
+    file_type_name_ = file_type;
+    emit fileChanged();
+}
 
-    frame_data *fdata = frame_data_sequence_find(cf_->provider.frames, frame_num);
-    if (!fdata) {
-        return false;
+void CaptureEngine::onOpenFailed(const QString &message, int generation)
+{
+    if (generation != file_generation_) {
+        return;
     }
+    file_path_.clear();
+    loading_ = false;
+    last_error_ = message;
+    emit fileChanged();
+    emit loadingChanged();
+    emit errorOccurred(message);
+}
 
-    column_info *cinfo = &cf_->cinfo;
-    wtap_rec rec;
-    wtap_rec_init(&rec, 2048);
-    int err = 0;
-    char *err_info = nullptr;
-
-    if (!wtap_seek_read(cf_->provider.wth, fdata->file_off, &rec, &err, &err_info)) {
-        g_free(err_info);
-        wtap_rec_cleanup(&rec);
-        col_fill_in_error(cinfo, fdata, false, true);
-        for (unsigned i = 0; i < cinfo->num_cols; i++) {
-            columns << QString::fromUtf8(get_column_text(cinfo, i));
-        }
-        return true;
+void CaptureEngine::onLoadProgress(double progress, int packets, int generation)
+{
+    if (generation != file_generation_) {
+        return;
     }
+    setProgress(progress);
+    packet_count_ = packets;
+    emit packetCountChanged();
+}
 
-    epan_dissect_t edt;
-    epan_dissect_init(&edt, cf_->epan, have_custom_cols(cinfo), false);
-    col_custom_prime_edt(&edt, cinfo);
-    epan_dissect_run(&edt, cf_->cd_t, &rec, fdata, cinfo);
-    epan_dissect_fill_in_columns(&edt, false, true);
-
-    columns.reserve(static_cast<int>(cinfo->num_cols));
-    for (unsigned i = 0; i < cinfo->num_cols; i++) {
-        columns << QString::fromUtf8(get_column_text(cinfo, i));
+void CaptureEngine::onLoaded(int packets, qint64 elapsed_ms, const QString &duration, const QString &error, int generation)
+{
+    if (generation != file_generation_) {
+        return;
     }
+    packet_count_ = packets;
+    load_time_ms_ = elapsed_ms;
+    duration_ = duration;
+    loading_ = false;
+    setProgress(1.0);
 
-    epan_dissect_cleanup(&edt);
-    wtap_rec_cleanup(&rec);
-    return true;
+    displayed_.clear();
+    displayed_.reserve(packets);
+    for (int frame = 1; frame <= packets; frame++) {
+        displayed_.append(static_cast<quint32>(frame));
+    }
+    filter_time_ms_ = 0;
+
+    emit packetCountChanged();
+    emit loadingChanged();
+    emit displayedFramesChanged();
+    emit loaded();
+
+    if (!error.isEmpty()) {
+        last_error_ = tr("The file was only partly read: %1").arg(error);
+        emit errorOccurred(last_error_);
+    }
+}
+
+void CaptureEngine::onInventoryReady(const HostInventorySnapshot &snapshot, int generation)
+{
+    if (generation != file_generation_) {
+        return;
+    }
+    inventory_ = snapshot;
+    emit inventoryChanged();
+}
+
+void CaptureEngine::requestRows(const QVector<quint32> &frames)
+{
+    QMetaObject::invokeMethod(worker_, "requestRows", Qt::QueuedConnection,
+                              Q_ARG(QVector<quint32>, frames), Q_ARG(int, file_generation_));
+}
+
+QStringList CaptureEngine::columnsBlocking(quint32 frame)
+{
+    QStringList columns;
+    QMetaObject::invokeMethod(worker_, [this, frame, &columns]() {
+        columns = worker_->columnsNow(frame);
+    }, Qt::BlockingQueuedConnection);
+    return columns;
+}
+
+void CaptureEngine::onRowsReady(const QVector<PacketRow> &rows, int generation)
+{
+    if (generation == file_generation_) {
+        emit rowsReady(rows);
+    }
+}
+
+void CaptureEngine::selectFrame(int frame)
+{
+    if (frame == selected_frame_) {
+        return;
+    }
+    selected_frame_ = frame;
+    emit selectedFrameChanged();
+    details_generation_++;
+    if (frame > 0) {
+        QMetaObject::invokeMethod(worker_, "requestDetails", Qt::QueuedConnection,
+                                  Q_ARG(quint32, static_cast<quint32>(frame)), Q_ARG(int, details_generation_));
+    } else {
+        emit detailsReady(PacketDetails());
+    }
+}
+
+void CaptureEngine::onDetailsReady(const PacketDetails &details, int generation)
+{
+    if (generation == details_generation_) {
+        emit detailsReady(details);
+    }
+}
+
+void CaptureEngine::checkFilter(const QString &text)
+{
+    check_generation_++;
+    QMetaObject::invokeMethod(worker_, "checkFilter", Qt::QueuedConnection,
+                              Q_ARG(QString, text), Q_ARG(int, check_generation_));
+}
+
+void CaptureEngine::onFilterChecked(const QString &text, bool valid, const QString &message, int start, int length, int generation)
+{
+    if (generation == check_generation_) {
+        emit filterChecked(text, valid, message, start, length);
+    }
+}
+
+void CaptureEngine::applyFilter(const QString &text)
+{
+    if (!hasFile() || loading_) {
+        return;
+    }
+    worker_->cancel = true;   /* stop a filter that is still running */
+    filter_generation_++;
+    filter_text_ = text.trimmed();
+    filtering_ = true;
+    filter_progress_ = 0.0;
+    emit filterChanged();
+    emit filterProgressChanged();
+    QMetaObject::invokeMethod(worker_, "applyFilter", Qt::QueuedConnection,
+                              Q_ARG(QString, filter_text_), Q_ARG(int, filter_generation_));
+}
+
+void CaptureEngine::applyFilterBlocking(const QString &text)
+{
+    QEventLoop loop;
+    auto connection = connect(this, &CaptureEngine::filterChanged, &loop, [this, &loop]() {
+        if (!filtering_) loop.quit();
+    });
+    applyFilter(text);
+    if (filtering_) {
+        loop.exec();
+    }
+    disconnect(connection);
+}
+
+void CaptureEngine::cancelFilter()
+{
+    if (!filtering_) {
+        return;
+    }
+    worker_->cancel = true;
+    filter_generation_++;
+    filtering_ = false;
+    filter_text_ = applied_filter_text_;   /* the list still shows the old filter's packets */
+    emit filterChanged();
+}
+
+void CaptureEngine::onFilterProgress(double progress)
+{
+    filter_progress_ = progress;
+    emit filterProgressChanged();
+}
+
+void CaptureEngine::onFilterApplied(const QString &, const QVector<quint32> &frames, qint64 elapsed_ms, int generation)
+{
+    if (generation != filter_generation_) {
+        return;
+    }
+    displayed_ = frames;
+    applied_filter_text_ = filter_text_;
+    filter_time_ms_ = elapsed_ms;
+    filtering_ = false;
+    emit displayedFramesChanged();
+    emit filterChanged();
+}
+
+void CaptureEngine::onFilterFailed(const QString &, const QString &message, int generation)
+{
+    if (generation != filter_generation_) {
+        return;
+    }
+    filtering_ = false;
+    filter_text_ = applied_filter_text_;
+    emit filterChanged();
+    last_error_ = message;
+    emit errorOccurred(message);
 }
 
 void CaptureEngine::setProgress(double progress)
 {
-    if (progress < 0.0) progress = 0.0;
-    if (progress > 1.0) progress = 1.0;
+    progress = qBound(0.0, progress, 1.0);
     if (qFuzzyCompare(progress + 1.0, load_progress_ + 1.0)) {
         return;
     }

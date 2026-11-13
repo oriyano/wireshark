@@ -13,7 +13,19 @@ import QtQuick.Layouts
 Item {
     id: root
 
-    property int selectedRow: -1
+    // The selected packet lives in the engine, so every view agrees.
+    readonly property int selectedRow: captureEngine.selectedFrame > 0 && modelRevision >= 0
+                                        ? packetListModel.rowOfFrame(captureEngine.selectedFrame) : -1
+    property int modelRevision: 0
+    Connections {
+        target: packetListModel
+        function onModelReset() {
+            root.modelRevision++
+            if (root.selectedRow >= 0)
+                Qt.callLater(function() { table.positionViewAtRow(root.selectedRow, TableView.Contain) })
+        }
+    }
+
     readonly property int infoColumn: packetListModel.columnCount() - 1
 
     // Fixed widths for the narrow columns; Info takes what is left.
@@ -33,7 +45,7 @@ Item {
     function selectRow(row) {
         if (row < 0 || row >= table.rows)
             return
-        selectedRow = row
+        captureEngine.selectFrame(packetListModel.frameAt(row))
         table.positionViewAtRow(row, TableView.Contain)
     }
 
@@ -88,7 +100,7 @@ Item {
                 }
             }
 
-            Keys.onUpPressed: root.selectRow(root.selectedRow - 1)
+            Keys.onUpPressed: root.selectRow(Math.max(0, root.selectedRow - 1))
             Keys.onDownPressed: root.selectRow(root.selectedRow + 1)
             Keys.onPressed: (event) => {
                 const page = Math.floor(table.height / (Theme.rowHeight + 4))
@@ -157,7 +169,7 @@ Item {
 
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: { root.selectedRow = cell.row; table.forceActiveFocus() }
+                    onClicked: { captureEngine.selectFrame(packetListModel.frameAt(cell.row)); table.forceActiveFocus() }
                 }
             }
         }

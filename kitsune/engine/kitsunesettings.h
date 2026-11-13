@@ -25,14 +25,22 @@ public:
     int themeMode() const { return theme_mode_; }
     void setThemeMode(int mode);
     bool systemPrefersDark() const;
+    /* For a command-line run: change the theme without saving it. */
+    void setThemeModeForSession(int mode);
+
+    /* Names the user gave subnets, keyed by CIDR. Empty if none. */
+    Q_INVOKABLE QString subnetName(const QString &cidr) const;
+    Q_INVOKABLE void setSubnetName(const QString &cidr, const QString &name);
 
 signals:
     void themeModeChanged();
     void systemPrefersDarkChanged();
+    void subnetNamesChanged();
 
 private:
     QSettings settings_;
     int theme_mode_;
+    bool save_theme_ = true;
 };
 
 #endif // KITSUNE_KITSUNESETTINGS_H

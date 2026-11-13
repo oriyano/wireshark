@@ -44,7 +44,7 @@ Rectangle {
         }
         Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
         CountRow { label: qsTr("Packets"); value: captureEngine.formatCount(captureEngine.packetCount) }
-        CountRow { label: qsTr("Displayed"); value: captureEngine.formatCount(captureEngine.loading ? 0 : captureEngine.packetCount) }
+        CountRow { label: qsTr("Displayed"); value: captureEngine.formatCount(captureEngine.loading ? 0 : captureEngine.displayedCount) }
         CountRow { label: qsTr("Dropped"); value: "—" }
     }
 }

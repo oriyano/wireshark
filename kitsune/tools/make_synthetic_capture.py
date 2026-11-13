@@ -105,6 +105,8 @@ class Writer:
             # MSS, SACK permitted, timestamps / window scale differ by OS.
             if src.os_kind == "windows":
                 options = b"\x02\x04\x05\xb4\x01\x03\x03\x08\x01\x01\x04\x02"
+            elif src.os_kind == "embedded":
+                options = b"\x02\x04\x05\xb4"          # small stacks: MSS only
             else:
                 options = b"\x02\x04\x05\xb4\x04\x02\x08\x0a" + struct.pack("!II", seq & 0xFFFFFFFF, 0) + b"\x01\x03\x03\x07"
         # Window scaling applies after the handshake: 2^8 on Windows, 2^7 on Linux.
@@ -153,8 +155,9 @@ def http_conversation(w, client, server, gw_mac, rng):
     w.send_tcp(client, server, cmac, smac, sport, dport, cseq, 0, 0x02, syn=True); w.advance(0.0004)
     w.send_tcp(server, client, smac, cmac, dport, sport, sseq, cseq + 1, 0x12, syn=True); w.advance(0.0003)
     w.send_tcp(client, server, cmac, smac, sport, dport, cseq + 1, sseq + 1, 0x10); w.advance(0.0002)
-    agent = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0" if client.os_kind == "windows"
-             else "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) Firefox/133.0")
+    agent = {"windows": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0",
+             "linux": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) Firefox/133.0",
+             "embedded": "CamFirmware/2.1 (embedded)"}[client.os_kind]
     request = ("GET /status HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nAccept: */*\r\n\r\n"
                % (server.name.lower(), agent)).encode()
     w.send_tcp(client, server, cmac, smac, sport, dport, cseq + 1, sseq + 1, 0x18, request); w.advance(0.002)
@@ -203,6 +206,31 @@ def arp_exchange(w, asker, target):
     w.frame(w.ether(target.mac, asker.mac, 0x0806, reply + b"\0" * 18))
 
 
+def dhcp_exchange(w, client, server, rng):
+    """DHCP request and ack: the client's name and vendor class, and the router option."""
+    xid = rng.getrandbits(32)
+    vendor = {"windows": b"MSFT 5.0", "linux": b"dhcpcd-10.0.6:Linux", "embedded": b"udhcp 1.36.1"}[client.os_kind]
+    name = client.name.encode()
+
+    def bootp(op, ciaddr, yiaddr, options):
+        body = struct.pack("!BBBBIHH4s4s4s4s16s64s128s", op, 1, 6, 0, xid, 0, 0x8000, ip_bytes(ciaddr),
+                           ip_bytes(yiaddr), b"\0" * 4, b"\0" * 4, mac_bytes(client.mac) + b"\0" * 10, b"\0" * 64,
+                           b"\0" * 128)
+        return body + b"\x63\x82\x53\x63" + options + b"\xff"
+
+    req_opts = (b"\x35\x01\x03" + b"\x32\x04" + ip_bytes(client.ip) + b"\x0c" + bytes([len(name)]) + name +
+                b"\x3c" + bytes([len(vendor)]) + vendor + b"\x37\x04\x01\x03\x06\x0f")
+    request = bootp(1, "0.0.0.0", "0.0.0.0", req_opts)
+    w.frame(w.ether(client.mac, "ff:ff:ff:ff:ff:ff", 0x0800,
+                    w.ipv4("0.0.0.0", "255.255.255.255", 17, w.udp("0.0.0.0", "255.255.255.255", 68, 67, request), client.ttl)))
+    w.advance(0.004)
+    ack_opts = (b"\x35\x01\x05" + b"\x36\x04" + ip_bytes(server.ip) + b"\x33\x04\x00\x01\x51\x80" +
+                b"\x01\x04\xff\xff\xff\x00" + b"\x03\x04" + ip_bytes(server.ip) + b"\x06\x04" + ip_bytes("192.168.1.53"))
+    ack = bootp(2, "0.0.0.0", client.ip, ack_opts)
+    w.frame(w.ether(server.mac, client.mac, 0x0800,
+                    w.ipv4(server, client, 17, w.udp(server.ip, client.ip, 67, 68, ack), server.ttl)))
+
+
 def ping(w, src, dst, seq):
     payload = bytes(range(32))
     for kind, a, b in ((8, src, dst), (0, dst, src)):
@@ -239,13 +267,15 @@ def main():
         elif roll < 0.65:
             ssh_banner(w, client, rng.choice(ssh_servers), rng)
         elif roll < 0.85:
-            dns_lookup(w, client, dns_server, rng.choice(["updates", "mail", "intranet", "printer"]) + ".office.example",
-                       "192.168.20.%d" % rng.randrange(10, 18), rng)
+            server = rng.choice(servers)
+            dns_lookup(w, client, dns_server, server.name.lower() + ".office.example", server.ip, rng)
         elif roll < 0.95:
             seq += 1
             ping(w, client, rng.choice(hosts + [gateway]), seq & 0xFFFF)
-        else:
+        elif roll < 0.97:
             arp_exchange(w, client, gateway)
+        else:
+            dhcp_exchange(w, client, gateway, rng)
         w.advance(0.004)
     w.close()
     print("wrote %d packets to %s" % (w.count, path))

@@ -7,6 +7,10 @@
 
 #include "packetlistmodel.h"
 
+#include <QTimer>
+
+#include <algorithm>
+
 #include "engine/captureengine.h"
 
 /* Enough rows for several screens of scrolling in both directions. */
@@ -15,10 +19,8 @@ static const int row_cache_size = 4000;
 PacketListModel::PacketListModel(CaptureEngine *engine, QObject *parent) :
     QAbstractTableModel(parent),
     engine_(engine),
-    row_count_(0),
     protocol_column_(-1),
-    cache_(row_cache_size),
-    dissected_rows_(0)
+    cache_(row_cache_size)
 {
     for (int i = 0; i < engine_->columnCount(); i++) {
         if (engine_->columnTitle(i) == QLatin1String("Protocol")) {
@@ -27,13 +29,14 @@ PacketListModel::PacketListModel(CaptureEngine *engine, QObject *parent) :
         }
     }
 
-    connect(engine_, &CaptureEngine::fileChanged, this, &PacketListModel::onFileChanged);
-    connect(engine_, &CaptureEngine::loaded, this, &PacketListModel::onLoaded);
+    connect(engine_, &CaptureEngine::displayedFramesChanged, this, &PacketListModel::onDisplayedFramesChanged);
+    connect(engine_, &CaptureEngine::fileChanged, this, &PacketListModel::onDisplayedFramesChanged);
+    connect(engine_, &CaptureEngine::rowsReady, this, &PacketListModel::onRowsReady);
 }
 
 int PacketListModel::rowCount(const QModelIndex &parent) const
 {
-    return parent.isValid() ? 0 : row_count_;
+    return parent.isValid() ? 0 : static_cast<int>(frames_.size());
 }
 
 int PacketListModel::columnCount(const QModelIndex &parent) const
@@ -46,42 +49,92 @@ QString PacketListModel::columnTitle(int column) const
     return engine_->columnTitle(column);
 }
 
+int PacketListModel::frameAt(int row) const
+{
+    return row >= 0 && row < frames_.size() ? static_cast<int>(frames_[row]) : 0;
+}
+
+int PacketListModel::rowOfFrame(int frame) const
+{
+    auto it = std::lower_bound(frames_.constBegin(), frames_.constEnd(), static_cast<quint32>(frame));
+    if (it == frames_.constEnd() || *it != static_cast<quint32>(frame)) {
+        return -1;
+    }
+    return static_cast<int>(it - frames_.constBegin());
+}
+
 const QStringList *PacketListModel::rowColumns(int row) const
 {
-    if (QStringList *cached = cache_.object(row)) {
+    const quint32 frame = frames_[row];
+    if (QStringList *cached = cache_.object(frame)) {
         return cached;
     }
 
-    QStringList *columns = new QStringList();
-    if (!engine_->dissectColumns(static_cast<uint32_t>(row) + 1, *columns)) {
-        delete columns;
-        return nullptr;
+    if (synchronous_) {
+        QStringList *columns = new QStringList(engine_->columnsBlocking(frame));
+        cache_.insert(frame, columns);
+        return columns;
     }
-    dissected_rows_++;
-    cache_.insert(row, columns);
-    return columns;
+
+    if (!pending_.contains(frame)) {
+        pending_.insert(frame);
+        to_request_.append(frame);
+        if (!flush_scheduled_) {
+            flush_scheduled_ = true;
+            QTimer::singleShot(0, const_cast<PacketListModel *>(this), &PacketListModel::flushRequests);
+        }
+    }
+    return nullptr;
+}
+
+void PacketListModel::flushRequests()
+{
+    flush_scheduled_ = false;
+    if (to_request_.isEmpty()) {
+        return;
+    }
+    engine_->requestRows(to_request_);
+    to_request_.clear();
+}
+
+void PacketListModel::onRowsReady(const QVector<PacketRow> &rows)
+{
+    int first = -1, last = -1;
+    for (const PacketRow &row : rows) {
+        pending_.remove(row.frame);
+        cache_.insert(row.frame, new QStringList(row.columns));
+        const int index = rowOfFrame(static_cast<int>(row.frame));
+        if (index < 0) {
+            continue;
+        }
+        first = first < 0 ? index : qMin(first, index);
+        last = qMax(last, index);
+    }
+    if (first >= 0) {
+        emit dataChanged(index(first, 0), index(last, columnCount() - 1));
+    }
 }
 
 QVariant PacketListModel::data(const QModelIndex &index, int role) const
 {
-    if (!index.isValid() || index.row() >= row_count_) {
+    if (!index.isValid() || index.row() >= frames_.size()) {
         return QVariant();
     }
 
     switch (role) {
     case Qt::DisplayRole: {
         const QStringList *columns = rowColumns(index.row());
-        return columns ? columns->value(index.column()) : QVariant();
+        return columns ? columns->value(index.column()) : QString();
     }
     case ProtocolRole: {
         if (protocol_column_ < 0) {
             return QString();
         }
         const QStringList *columns = rowColumns(index.row());
-        return columns ? columns->value(protocol_column_) : QVariant();
+        return columns ? columns->value(protocol_column_) : QString();
     }
     case FrameNumberRole:
-        return index.row() + 1;
+        return static_cast<int>(frames_[index.row()]);
     default:
         return QVariant();
     }
@@ -106,19 +159,14 @@ QHash<int, QByteArray> PacketListModel::roleNames() const
     return names;
 }
 
-void PacketListModel::onFileChanged()
+void PacketListModel::onDisplayedFramesChanged()
 {
     beginResetModel();
-    cache_.clear();
-    row_count_ = 0;
-    dissected_rows_ = 0;
-    endResetModel();
-}
-
-void PacketListModel::onLoaded()
-{
-    beginResetModel();
-    cache_.clear();
-    row_count_ = engine_->packetCount();
+    frames_ = engine_->displayedFrames();
+    if (!engine_->hasFile()) {
+        cache_.clear();
+    }
+    pending_.clear();
+    to_request_.clear();
     endResetModel();
 }

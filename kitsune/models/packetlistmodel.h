@@ -2,10 +2,12 @@
  *
  * Kitsune - table model for the packet list.
  *
- * Rows are dissected only when a view asks for them, and the column
- * strings of recently viewed rows are kept in a bounded cache. A view
- * that shows 40 rows of a million-packet capture therefore dissects
- * about 40 packets, not a million.
+ * Rows are the frames that pass the display filter. A row's columns
+ * are dissected only when a view asks for them: the first request
+ * returns empty strings and asks the engine thread, and the row fills
+ * in when the answer arrives. Recently viewed rows are cached, so a
+ * view that shows 40 rows of a million-packet capture dissects about
+ * 40 packets, and the interface never waits for any of them.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -15,7 +17,11 @@
 
 #include <QAbstractTableModel>
 #include <QCache>
+#include <QSet>
 #include <QStringList>
+#include <QVector>
+
+#include "engine/enginetypes.h"
 
 class CaptureEngine;
 
@@ -40,25 +46,33 @@ public:
 
     int protocolColumn() const { return protocol_column_; }
     Q_INVOKABLE QString columnTitle(int column) const;
+    Q_INVOKABLE int frameAt(int row) const;
+    Q_INVOKABLE int rowOfFrame(int frame) const;
 
-    /* Number of rows dissected since the file was opened (for benchmarks). */
-    qint64 dissectedRows() const { return dissected_rows_; }
+    /* Answer from the engine immediately instead of asynchronously.
+     * For the command-line benchmark, which has no event loop running
+     * between reads. */
+    void setSynchronous(bool synchronous) { synchronous_ = synchronous; }
 
 signals:
     void columnsChanged();
 
 private slots:
-    void onFileChanged();
-    void onLoaded();
+    void onDisplayedFramesChanged();
+    void onRowsReady(const QVector<PacketRow> &rows);
+    void flushRequests();
 
 private:
     const QStringList *rowColumns(int row) const;
 
     CaptureEngine *engine_;
-    int row_count_;
     int protocol_column_;
-    mutable QCache<int, QStringList> cache_;
-    mutable qint64 dissected_rows_;
+    bool synchronous_ = false;
+    QVector<quint32> frames_;
+    mutable QCache<quint32, QStringList> cache_;
+    mutable QSet<quint32> pending_;
+    mutable QVector<quint32> to_request_;
+    mutable bool flush_scheduled_ = false;
 };
 
 #endif // KITSUNE_PACKETLISTMODEL_H

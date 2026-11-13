@@ -41,7 +41,20 @@ Item {
         "packets":   "M3 7l9-4 9 4-9 4z M3 12l9 4 9-4 M3 17l9 4 9-4",
         "clock":     "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0 M12 7v5l3 2",
         "file":      "M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z M14 3v6h6",
-        "learn":     "M2 9l10-5 10 5-10 5z M6 11v5c3 2.5 9 2.5 12 0v-5 M22 9v6"
+        "learn":     "M2 9l10-5 10 5-10 5z M6 11v5c3 2.5 9 2.5 12 0v-5 M22 9v6",
+        "filter":    "M3 5h18l-7 8v6l-4 2v-8z",
+        "chevronRight": "M9 6l6 6-6 6",
+        "chevronDown":  "M6 9l6 6 6-6",
+        "router":    "M3 14h18v6H3z M7 17h.5 M11 17h.5 M8 10a5.5 5.5 0 0 1 8 0 M5.5 7.5a9 9 0 0 1 13 0",
+        "server":    "M4 4h16v6H4z M4 14h16v6H4z M8 7h.5 M8 17h.5",
+        "laptop":    "M5 5h14v10H5z M2 19h20",
+        "chip":      "M7 7h10v10H7z M10 3v4 M14 3v4 M10 17v4 M14 17v4 M3 10h4 M3 14h4 M17 10h4 M17 14h4",
+        "globe":     "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0 M3 12h18 M12 3a14 14 0 0 1 0 18 M12 3a14 14 0 0 0 0 18",
+        "edit":      "M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4",
+        "check":     "M5 12.5l4.5 4.5L19 7.5",
+        "warning":   "M12 3l10 18H2z M12 10v4.5 M12 17.5v.5",
+        "play":      "M7 4l13 8-13 8z",
+        "ports":     "M5 8h14v8H5z M8 11v2 M11 11v2 M14 11v2 M17 11v2"
     })
 
     Shape {

@@ -24,6 +24,19 @@ ApplicationWindow {
 
     // Which view fills the main area: "packets", "map", "stats", "graphs".
     property string currentView: "packets"
+    readonly property bool packetsView: currentView === "packets" || currentView === "details" || currentView === "bytes"
+
+    // Set from the command line, for screenshots and demos.
+    property string filterDraft: ""
+    property string mapSubnet: ""
+    property int mapHostRow: -1
+    property int detailsRow: -1
+    onDetailsRowChanged: detailsTimer.restart()
+    // The details tree fills in after the packet is dissected.
+    Timer { id: detailsTimer; interval: 300; onTriggered: packetsPage.details.select(window.detailsRow) }
+    onFilterDraftChanged: packetsPage.filterBar.setText(filterDraft)
+    onMapSubnetChanged: networkView.subnet = mapSubnet
+    onMapHostRowChanged: networkView.hostRow = mapHostRow
 
     function openCapture() { openDialog.open() }
 
@@ -78,11 +91,17 @@ ApplicationWindow {
                     anchors.fill: parent
                     anchors.margins: 1
                     currentIndex: !captureEngine.hasFile ? 0
-                                  : window.currentView === "packets" ? 1 : 2
+                                  : window.packetsView ? 1
+                                  : window.currentView === "map" ? 2 : 3
 
                     WelcomeView { onOpenRequested: window.openCapture() }
 
-                    PacketListView { }
+                    PacketsPage {
+                        id: packetsPage
+                        focusPane: window.currentView === "packets" ? "all" : window.currentView
+                    }
+
+                    NetworkView { id: networkView }
 
                     PlaceholderView { view: window.currentView }
                 }

@@ -30,8 +30,17 @@ set(KITSUNE_SRC
 	main.cpp
 	engine/captureengine.cpp
 	engine/captureengine.h
+	engine/enginetypes.h
+	engine/engineworker.cpp
+	engine/engineworker.h
+	engine/hostinventory.cpp
+	engine/hostinventory.h
 	engine/kitsunesettings.cpp
 	engine/kitsunesettings.h
+	models/hostmodels.cpp
+	models/hostmodels.h
+	models/packetdetailsmodel.cpp
+	models/packetdetailsmodel.h
 	models/packetlistmodel.cpp
 	models/packetlistmodel.h
 	${CMAKE_SOURCE_DIR}/app/wireshark_flavor.c
@@ -52,6 +61,11 @@ set(KITSUNE_QML
 	qml/PlaceholderView.qml
 	qml/ThemeSwitcher.qml
 	qml/WelcomeView.qml
+	qml/FilterBar.qml
+	qml/PacketsPage.qml
+	qml/PacketDetailsView.qml
+	qml/PacketBytesView.qml
+	qml/NetworkView.qml
 )
 # Serve the files next to the module's qmldir so that they see each
 # other, and the Theme singleton, on every Qt 6 version.
@@ -104,3 +118,28 @@ install(TARGETS kitsune
 	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 	BUNDLE DESTINATION .
 )
+
+# Unit tests: build with the "kitsune_tests" target, run with ctest -R kitsune.
+find_package(Qt6 COMPONENTS Test QUIET)
+if(Qt6Test_FOUND)
+	qt_add_executable(kitsune_tests
+		tests/tst_hostinventory.cpp
+		engine/hostinventory.cpp
+		engine/hostinventory.h
+		engine/enginetypes.h
+	)
+	set_target_properties(kitsune_tests PROPERTIES
+		AUTOMOC ON
+		RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/run
+	)
+	target_include_directories(kitsune_tests PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}
+		${CMAKE_SOURCE_DIR}
+		${CMAKE_BINARY_DIR}
+	)
+	target_link_libraries(kitsune_tests PRIVATE Qt6::Core Qt6::Test wiretap epan wsutil)
+	if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+		target_compile_options(kitsune_tests PRIVATE -Wno-error)
+	endif()
+	add_test(NAME kitsune_hostinventory COMMAND kitsune_tests)
+endif()
