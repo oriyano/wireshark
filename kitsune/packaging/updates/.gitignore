@@ -1,0 +1,3 @@
+# Signing keys never go into the repository.
+*.pem
+*.key
