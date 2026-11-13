@@ -1,0 +1,69 @@
+{
+  "kind": "scoring",
+  "schema_version": 1,
+  "description": "Weights and thresholds for combining passive evidence into an OS guess. README.md section 'Confidence scheme' explains the algorithm; reference/kitsune_fp.py implements it.",
+  "strengths": {
+    "definitive": 0.95,
+    "strong": 0.8,
+    "moderate": 0.6,
+    "weak": 0.35,
+    "hint": 0.15
+  },
+  "sources": {
+    "ip_ttl": {
+      "reliability": 0.6,
+      "spoofable": false,
+      "why": "Initial TTL is a stack default, but many stacks share each value and some hosts change it."
+    },
+    "tcp_syn": {
+      "reliability": 0.85,
+      "spoofable": false,
+      "why": "The SYN layout comes from the kernel, but VPNs, proxies, NAT and tuning can change window and MSS."
+    },
+    "dhcp_option55": {
+      "reliability": 0.85,
+      "spoofable": false,
+      "why": "The DHCP client is part of the OS and the order of the parameter request list rarely changes."
+    },
+    "dhcp_vendor_class": {
+      "reliability": 0.9,
+      "spoofable": true,
+      "why": "Most DHCP clients send a fixed vendor class; it can be configured but rarely is."
+    },
+    "http_user_agent": {
+      "reliability": 0.65,
+      "spoofable": true,
+      "why": "Any program can send any User-Agent, and browsers freeze or reduce the OS part."
+    },
+    "http_server": {
+      "reliability": 0.75,
+      "spoofable": true,
+      "why": "Admins can hide or change the Server header, and a reverse proxy may answer instead of the host."
+    },
+    "ssh_banner": {
+      "reliability": 0.9,
+      "spoofable": true,
+      "why": "Distribution packages put their own suffix in the banner; changing it needs a rebuild."
+    },
+    "smb_native_os": {
+      "reliability": 0.95,
+      "spoofable": false,
+      "why": "SMB1 session setup carries the OS name the host reports about itself."
+    },
+    "ntlmssp_version": {
+      "reliability": 0.95,
+      "spoofable": false,
+      "why": "NTLMSSP messages carry the Windows major, minor and build number."
+    }
+  },
+  "conflict_penalty": 0.6,
+  "thresholds": {
+    "specific": 0.6,
+    "coarse": 0.3
+  },
+  "bands": [
+    { "name": "high", "min": 0.85 },
+    { "name": "medium", "min": 0.6 },
+    { "name": "low", "min": 0.0 }
+  ]
+}

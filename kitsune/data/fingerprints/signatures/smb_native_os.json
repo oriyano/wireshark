@@ -1,0 +1,117 @@
+{
+  "kind": "signatures",
+  "source": "smb_native_os",
+  "schema_version": 1,
+  "review_status": "draft",
+  "description": "SMB1 Session Setup AndX NativeOS string, with the NativeLanMan string available to a signature as an optional second pattern (both must match). SMB2 and SMB3 do not carry these strings; use NTLMSSP version (ntlmssp_version.json) for those. Signatures are tried in order and the first match wins.",
+  "signatures": [
+    {
+      "id": "smb-win-server-2019",
+      "label": "windows-server-2019",
+      "strength": "definitive",
+      "match": { "native_os": "^Windows Server 2019" },
+      "examples": [
+        { "native_os": "Windows Server 2019 Standard 17763" }
+      ]
+    },
+    {
+      "id": "smb-win-server-2016",
+      "label": "windows-server-2016",
+      "strength": "definitive",
+      "match": { "native_os": "^Windows Server 2016" },
+      "examples": [
+        { "native_os": "Windows Server 2016 Standard 14393" }
+      ]
+    },
+    {
+      "id": "smb-win-10",
+      "label": "windows-10",
+      "strength": "definitive",
+      "match": { "native_os": "^Windows 10 " },
+      "examples": [
+        { "native_os": "Windows 10 Pro 19045" }
+      ],
+      "notes": "Only when SMB1 is enabled, which is off by default since 1709."
+    },
+    {
+      "id": "smb-win-8.1",
+      "label": "windows-8.1",
+      "strength": "definitive",
+      "match": { "native_os": "^Windows (?:8\\.1 |Server 2012 R2)" },
+      "examples": [
+        { "native_os": "Windows 8.1 Pro 9600" },
+        { "native_os": "Windows Server 2012 R2 Standard 9600" }
+      ]
+    },
+    {
+      "id": "smb-win-8",
+      "label": "windows-8",
+      "strength": "definitive",
+      "match": { "native_os": "^Windows (?:8 |Server 2012 )" },
+      "examples": [
+        { "native_os": "Windows 8 Pro 9200" },
+        { "native_os": "Windows Server 2012 Standard 9200" }
+      ]
+    },
+    {
+      "id": "smb-win-7",
+      "label": "windows-7",
+      "strength": "definitive",
+      "match": { "native_os": "^Windows (?:7 |Server (?:\\(R\\) )?2008 R2)" },
+      "examples": [
+        { "native_os": "Windows 7 Professional 7601 Service Pack 1" },
+        { "native_os": "Windows Server 2008 R2 Standard 7601 Service Pack 1" }
+      ]
+    },
+    {
+      "id": "smb-win-vista",
+      "label": "windows-vista",
+      "strength": "definitive",
+      "match": { "native_os": "^Windows (?:Vista|Server \\(R\\) 2008|Server 2008) " },
+      "examples": [
+        { "native_os": "Windows Vista (TM) Business 6002 Service Pack 2" },
+        { "native_os": "Windows Server (R) 2008 Standard 6002 Service Pack 2" }
+      ]
+    },
+    {
+      "id": "smb-win-2003",
+      "label": "windows-xp",
+      "strength": "definitive",
+      "match": { "native_os": "^Windows Server 2003" },
+      "examples": [
+        { "native_os": "Windows Server 2003 3790 Service Pack 2" }
+      ]
+    },
+    {
+      "id": "smb-win-xp",
+      "label": "windows-xp",
+      "strength": "definitive",
+      "match": { "native_os": "^Windows 5\\.1$" },
+      "examples": [
+        { "native_os": "Windows 5.1" }
+      ]
+    },
+    {
+      "id": "smb-samba",
+      "label": "unix-like",
+      "strength": "moderate",
+      "match": { "native_os": "^Unix$", "native_lanman": "^Samba" },
+      "examples": [
+        { "native_os": "Unix", "native_lanman": "Samba 4.19.5-Debian" }
+      ],
+      "notes": "Samba runs on Linux, the BSDs and macOS; NAS boxes are the common case."
+    },
+    {
+      "id": "smb-windows-other",
+      "label": "windows",
+      "strength": "strong",
+      "match": { "native_os": "^Windows" },
+      "examples": [
+        { "native_os": "Windows 4.0" }
+      ]
+    }
+  ],
+  "services": [
+    { "id": "svc-samba", "field": "native_lanman", "pattern": "^Samba (?P<version>[\\w.-]+)", "product": "Samba" }
+  ]
+}

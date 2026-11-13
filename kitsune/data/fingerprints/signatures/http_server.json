@@ -1,0 +1,128 @@
+{
+  "kind": "signatures",
+  "source": "http_server",
+  "schema_version": 1,
+  "review_status": "draft",
+  "description": "HTTP Server response header, matched with a regular expression anywhere in the value. OS signatures are tried in order and the first match wins. Service rules are tried separately, also first match wins, and name the server software.",
+  "signatures": [
+    {
+      "id": "srv-iis-10",
+      "label": "windows-nt10",
+      "strength": "strong",
+      "match": { "pattern": "^Microsoft-IIS/10\\.0" },
+      "examples": ["Microsoft-IIS/10.0"],
+      "notes": "IIS 10 ships with Windows 10, 11 and Server 2016 to 2025."
+    },
+    {
+      "id": "srv-iis-8.5",
+      "label": "windows-8.1",
+      "strength": "strong",
+      "match": { "pattern": "^Microsoft-IIS/8\\.5" },
+      "examples": ["Microsoft-IIS/8.5"],
+      "notes": "Server 2012 R2 or Windows 8.1."
+    },
+    {
+      "id": "srv-iis-8.0",
+      "label": "windows-8",
+      "strength": "strong",
+      "match": { "pattern": "^Microsoft-IIS/8\\.0" },
+      "examples": ["Microsoft-IIS/8.0"],
+      "notes": "Server 2012 or Windows 8."
+    },
+    {
+      "id": "srv-iis-7.5",
+      "label": "windows-7",
+      "strength": "strong",
+      "match": { "pattern": "^Microsoft-IIS/7\\.5" },
+      "examples": ["Microsoft-IIS/7.5"],
+      "notes": "Server 2008 R2 or Windows 7."
+    },
+    {
+      "id": "srv-iis-7.0",
+      "label": "windows-vista",
+      "strength": "strong",
+      "match": { "pattern": "^Microsoft-IIS/7\\.0" },
+      "examples": ["Microsoft-IIS/7.0"],
+      "notes": "Server 2008 or Windows Vista."
+    },
+    {
+      "id": "srv-iis-6",
+      "label": "windows-xp",
+      "strength": "strong",
+      "match": { "pattern": "^Microsoft-IIS/(?:6\\.0|5\\.1)" },
+      "examples": ["Microsoft-IIS/6.0", "Microsoft-IIS/5.1"],
+      "notes": "IIS 6.0 is Server 2003; IIS 5.1 is Windows XP Professional."
+    },
+    {
+      "id": "srv-httpapi",
+      "label": "windows",
+      "strength": "moderate",
+      "match": { "pattern": "^Microsoft-HTTPAPI/" },
+      "examples": ["Microsoft-HTTPAPI/2.0"],
+      "notes": "HTTP.sys answering for a service that has no site bound (WinRM, SSDP, Web Services on Devices)."
+    },
+    {
+      "id": "srv-ubuntu",
+      "label": "ubuntu",
+      "strength": "moderate",
+      "match": { "pattern": "\\(Ubuntu\\)" },
+      "examples": ["Apache/2.4.52 (Ubuntu)", "nginx/1.18.0 (Ubuntu)"]
+    },
+    {
+      "id": "srv-debian",
+      "label": "debian",
+      "strength": "moderate",
+      "match": { "pattern": "\\(Debian\\)|\\(Raspbian\\)" },
+      "examples": ["Apache/2.4.62 (Debian)", "Apache/2.4.38 (Raspbian)"]
+    },
+    {
+      "id": "srv-rhel",
+      "label": "rhel-family",
+      "strength": "moderate",
+      "match": { "pattern": "\\((?:Red Hat|Red Hat Enterprise Linux|CentOS|CentOS Stream|Rocky Linux|AlmaLinux|Fedora|Oracle Linux)\\)" },
+      "examples": ["Apache/2.4.57 (Rocky Linux)", "Apache/2.4.6 (CentOS) OpenSSL/1.0.2k-fips", "Apache/2.4.37 (Red Hat Enterprise Linux)"]
+    },
+    {
+      "id": "srv-freebsd",
+      "label": "freebsd",
+      "strength": "moderate",
+      "match": { "pattern": "\\(FreeBSD\\)" },
+      "examples": ["Apache/2.4.62 (FreeBSD)"]
+    },
+    {
+      "id": "srv-win-apache",
+      "label": "windows",
+      "strength": "moderate",
+      "match": { "pattern": "\\(Win(?:32|64)\\)" },
+      "examples": ["Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12"]
+    },
+    {
+      "id": "srv-mikrotik",
+      "label": "mikrotik-routeros",
+      "strength": "strong",
+      "match": { "pattern": "^mikrotik routeros" },
+      "examples": ["mikrotik routeros 7 webfig"]
+    },
+    {
+      "id": "srv-unix",
+      "label": "unix-like",
+      "strength": "hint",
+      "match": { "pattern": "\\(Unix\\)" },
+      "examples": ["Apache/2.4.62 (Unix)"]
+    }
+  ],
+  "services": [
+    { "id": "svc-iis", "pattern": "^Microsoft-IIS/(?P<version>[\\d.]+)", "product": "Microsoft IIS" },
+    { "id": "svc-httpapi", "pattern": "^Microsoft-HTTPAPI/(?P<version>[\\d.]+)", "product": "Microsoft HTTP.sys" },
+    { "id": "svc-apache", "pattern": "^Apache(?:/(?P<version>[\\d.]+))?", "product": "Apache httpd" },
+    { "id": "svc-nginx", "pattern": "^nginx(?:/(?P<version>[\\d.]+))?", "product": "nginx" },
+    { "id": "svc-openresty", "pattern": "^openresty(?:/(?P<version>[\\d.]+))?", "product": "OpenResty" },
+    { "id": "svc-lighttpd", "pattern": "^lighttpd(?:/(?P<version>[\\d.]+))?", "product": "lighttpd" },
+    { "id": "svc-caddy", "pattern": "^Caddy$", "product": "Caddy" },
+    { "id": "svc-litespeed", "pattern": "^LiteSpeed$", "product": "LiteSpeed" },
+    { "id": "svc-jetty", "pattern": "^Jetty\\((?P<version>[^)]+)\\)", "product": "Eclipse Jetty" },
+    { "id": "svc-tomcat", "pattern": "^Apache-Coyote/(?P<version>[\\d.]+)", "product": "Apache Tomcat (Coyote)" },
+    { "id": "svc-python", "pattern": "^(?:SimpleHTTP|BaseHTTP)/[\\d.]+ Python/(?P<version>[\\d.]+)", "product": "Python http.server" },
+    { "id": "svc-mikrotik", "pattern": "^mikrotik routeros", "product": "MikroTik RouterOS web" }
+  ]
+}

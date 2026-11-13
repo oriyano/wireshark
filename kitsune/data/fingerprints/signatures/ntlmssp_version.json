@@ -1,0 +1,107 @@
+{
+  "kind": "signatures",
+  "source": "ntlmssp_version",
+  "schema_version": 1,
+  "review_status": "draft",
+  "description": "The VERSION structure in NTLMSSP NEGOTIATE, CHALLENGE and AUTHENTICATE messages (MS-NLMP 2.2.2.10): product major version, minor version and build. It appears in SMB2/3, HTTP Negotiate/NTLM, LDAP, RPC and more. Match the version of the host that sent the message. Ranges are inclusive and signatures are tried in order, first match wins.",
+  "signatures": [
+    {
+      "id": "ntlm-build-0",
+      "label": "unix-like",
+      "strength": "hint",
+      "match": { "major": "*", "minor": "*", "build_min": 0, "build_max": 0 },
+      "notes": "Windows always fills in a build. Samba and other non-Windows NTLM code often send build 0 with a made-up major and minor."
+    },
+    {
+      "id": "ntlm-xp",
+      "label": "windows-xp",
+      "strength": "definitive",
+      "match": { "major": 5, "minor": 1 }
+    },
+    {
+      "id": "ntlm-2003",
+      "label": "windows-xp",
+      "strength": "definitive",
+      "match": { "major": 5, "minor": 2 },
+      "notes": "Server 2003 and XP x64."
+    },
+    {
+      "id": "ntlm-vista",
+      "label": "windows-vista",
+      "strength": "definitive",
+      "match": { "major": 6, "minor": 0 }
+    },
+    {
+      "id": "ntlm-7",
+      "label": "windows-7",
+      "strength": "definitive",
+      "match": { "major": 6, "minor": 1 }
+    },
+    {
+      "id": "ntlm-8",
+      "label": "windows-8",
+      "strength": "definitive",
+      "match": { "major": 6, "minor": 2 }
+    },
+    {
+      "id": "ntlm-8.1",
+      "label": "windows-8.1",
+      "strength": "definitive",
+      "match": { "major": 6, "minor": 3 }
+    },
+    {
+      "id": "ntlm-1607",
+      "label": "windows-nt10",
+      "strength": "definitive",
+      "match": { "major": 10, "minor": 0, "build_min": 14393, "build_max": 14393 },
+      "notes": "Build 14393 is both Windows 10 1607 and Server 2016."
+    },
+    {
+      "id": "ntlm-1809",
+      "label": "windows-nt10",
+      "strength": "definitive",
+      "match": { "major": 10, "minor": 0, "build_min": 17763, "build_max": 17763 },
+      "notes": "Build 17763 is both Windows 10 1809 and Server 2019."
+    },
+    {
+      "id": "ntlm-server-2022",
+      "label": "windows-server-2022",
+      "strength": "definitive",
+      "match": { "major": 10, "minor": 0, "build_min": 20348, "build_max": 20348 }
+    },
+    {
+      "id": "ntlm-win10",
+      "label": "windows-10",
+      "strength": "definitive",
+      "match": { "major": 10, "minor": 0, "build_min": 10240, "build_max": 19045 }
+    },
+    {
+      "id": "ntlm-24h2",
+      "label": "windows-nt10",
+      "strength": "definitive",
+      "match": { "major": 10, "minor": 0, "build_min": 26100, "build_max": 26100 },
+      "notes": "Build 26100 is both Windows 11 24H2 and Server 2025."
+    },
+    {
+      "id": "ntlm-win11",
+      "label": "windows-11",
+      "strength": "definitive",
+      "match": { "major": 10, "minor": 0, "build_min": 22000, "build_max": 26199 },
+      "notes": "Windows 11 21H2 (22000) through 23H2 (22631); 26100 is caught by ntlm-24h2 above."
+    },
+    {
+      "id": "ntlm-win11-later",
+      "label": "windows-11",
+      "strength": "strong",
+      "match": { "major": 10, "minor": 0, "build_min": 26200, "build_max": 26999 },
+      "notes": "Windows 11 25H2 and later client builds. Re-check when a new Server release ships."
+    },
+    {
+      "id": "ntlm-nt10-other",
+      "label": "windows-nt10",
+      "strength": "strong",
+      "match": { "major": 10, "minor": 0 },
+      "notes": "Any other 10.0 build, including Insider builds and future releases."
+    }
+  ]
+}

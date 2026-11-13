@@ -1,0 +1,93 @@
+{
+  "kind": "signatures",
+  "source": "dhcp_option55",
+  "schema_version": 1,
+  "review_status": "draft",
+  "description": "DHCP option 55 (Parameter Request List) from DHCPDISCOVER and DHCPREQUEST, matched as the exact list of option codes in the order the client sent them. Signatures are tried in order and the first match wins.",
+  "signatures": [
+    {
+      "id": "dhcp55-windows-8plus",
+      "label": "windows",
+      "strength": "strong",
+      "match": { "option55": [1, 3, 6, 15, 31, 33, 43, 44, 46, 47, 119, 121, 249, 252] },
+      "notes": "Windows 8 and later, including 10, 11 and Server releases, all send this list, so it does not narrow the version."
+    },
+    {
+      "id": "dhcp55-windows-vista-7",
+      "label": "windows-legacy",
+      "strength": "strong",
+      "match": { "option55": [1, 15, 3, 6, 44, 46, 47, 31, 33, 121, 249, 43] },
+      "notes": "Windows Vista and 7."
+    },
+    {
+      "id": "dhcp55-windows-vista-7-wpad",
+      "label": "windows-legacy",
+      "strength": "strong",
+      "match": { "option55": [1, 15, 3, 6, 44, 46, 47, 31, 33, 121, 249, 43, 252] },
+      "notes": "Windows Vista and 7 with WPAD (option 252) requested."
+    },
+    {
+      "id": "dhcp55-windows-xp",
+      "label": "windows-xp",
+      "strength": "strong",
+      "match": { "option55": [1, 15, 3, 6, 44, 46, 47, 31, 33, 249, 43] },
+      "notes": "Windows XP and Server 2003."
+    },
+    {
+      "id": "dhcp55-windows-xp-wpad",
+      "label": "windows-xp",
+      "strength": "strong",
+      "match": { "option55": [1, 15, 3, 6, 44, 46, 47, 31, 33, 249, 43, 252] },
+      "notes": "Windows XP with WPAD requested."
+    },
+    {
+      "id": "dhcp55-macos-modern",
+      "label": "macos",
+      "strength": "strong",
+      "match": { "option55": [1, 121, 3, 6, 15, 108, 114, 119, 252, 95, 44, 46] },
+      "notes": "macOS 12 and later (adds option 108 IPv6-only preferred and 114 captive portal)."
+    },
+    {
+      "id": "dhcp55-macos",
+      "label": "macos",
+      "strength": "strong",
+      "match": { "option55": [1, 121, 3, 6, 15, 119, 252, 95, 44, 46] },
+      "notes": "macOS 10.x and 11."
+    },
+    {
+      "id": "dhcp55-ios-modern",
+      "label": "ios",
+      "strength": "moderate",
+      "match": { "option55": [1, 121, 3, 6, 15, 108, 114, 119, 252] },
+      "notes": "iOS and iPadOS 15 and later. Also seen on watchOS and tvOS."
+    },
+    {
+      "id": "dhcp55-ios",
+      "label": "ios",
+      "strength": "moderate",
+      "match": { "option55": [1, 121, 3, 6, 15, 119, 252] },
+      "notes": "Older iOS and iPadOS. Also seen on watchOS and tvOS."
+    },
+    {
+      "id": "dhcp55-android-dhcpcd",
+      "label": "android",
+      "strength": "moderate",
+      "match": { "option55": [1, 121, 33, 3, 6, 15, 28, 51, 58, 59] },
+      "notes": "Android 9 and earlier, which used dhcpcd. Other dhcpcd builds may send the same list."
+    },
+    {
+      "id": "dhcp55-android-modern",
+      "label": "android",
+      "strength": "weak",
+      "match": { "option55": [1, 3, 6, 15, 26, 28, 51, 58, 59, 43] },
+      "notes": "Android 10 and later (the framework's own DHCP client). The vendor class is a better tell."
+    },
+    {
+      "id": "dhcp55-isc-dhclient",
+      "label": "linux",
+      "strength": "moderate",
+      "match": { "option55": [1, 28, 2, 3, 15, 6, 119, 12, 44, 47, 26, 121, 42] },
+      "notes": "ISC dhclient as shipped by Debian and Ubuntu (desktop installs before NetworkManager's internal client)."
+    }
+  ]
+}

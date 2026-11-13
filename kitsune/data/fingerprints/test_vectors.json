@@ -1,0 +1,225 @@
+{
+  "kind": "test_vectors",
+  "schema_version": 1,
+  "description": "Synthetic observations with the guess the reference matcher must produce. Any implementation of the README rules (including Kitsune's C++ engine) should give the same label, band and detail.",
+  "vectors": [
+    {
+      "name": "Windows 11 laptop: DHCP, SYN, browser and SMB2 NTLM",
+      "observations": [
+        { "source": "dhcp_vendor_class", "value": "MSFT 5.0" },
+        { "source": "dhcp_option55", "value": [1, 3, 6, 15, 31, 33, 43, 44, 46, 47, 119, 121, 249, 252] },
+        {
+          "source": "ip_ttl",
+          "value": { "ttl": 128 }
+        },
+        {
+          "source": "tcp_syn",
+          "value": { "ttl": 128, "df": true, "mss": 1460, "window": 64240, "wscale": 8, "options": "mss,nop,ws,nop,nop,sok" }
+        },
+        { "source": "http_user_agent", "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0" },
+        {
+          "source": "ntlmssp_version",
+          "value": { "major": 10, "minor": 0, "build": 22631 }
+        }
+      ],
+      "expect": { "label": "windows-11", "band": "high" }
+    },
+    {
+      "name": "Windows 10/11 seen only through DHCP and a browser falls back to a coarse label",
+      "observations": [
+        { "source": "dhcp_vendor_class", "value": "MSFT 5.0" },
+        {
+          "source": "tcp_syn",
+          "value": { "ttl": 121, "df": true, "mss": 1460, "window": 64240, "wscale": 8, "options": "mss,nop,ws,nop,nop,sok" }
+        },
+        { "source": "http_user_agent", "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0" }
+      ],
+      "expect": { "label": "windows-nt10", "band": "medium" }
+    },
+    {
+      "name": "Browser User-Agent alone gives a low-confidence Windows 10/11",
+      "observations": [
+        { "source": "http_user_agent", "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" }
+      ],
+      "expect": { "label": "windows-client", "band": "low" }
+    },
+    {
+      "name": "Build 17763 cannot tell Windows 10 1809 from Server 2019",
+      "observations": [
+        {
+          "source": "ntlmssp_version",
+          "value": { "major": 10, "minor": 0, "build": 17763 }
+        }
+      ],
+      "expect": { "label": "windows-nt10", "band": "high" }
+    },
+    {
+      "name": "Windows Server 2022 file server",
+      "observations": [
+        {
+          "source": "ntlmssp_version",
+          "value": { "major": 10, "minor": 0, "build": 20348 }
+        },
+        {
+          "source": "tcp_syn",
+          "value": { "ttl": 128, "df": true, "mss": 1460, "window": 64240, "wscale": 8, "options": "mss,nop,ws,nop,nop,sok" }
+        },
+        { "source": "http_server", "value": "Microsoft-IIS/10.0" }
+      ],
+      "expect": { "label": "windows-server-2022", "band": "high", "services": ["Microsoft IIS 10.0"] }
+    },
+    {
+      "name": "Windows 7 over SMB1",
+      "observations": [
+        {
+          "source": "smb_native_os",
+          "value": { "native_os": "Windows 7 Professional 7601 Service Pack 1", "native_lanman": "Windows 7 Professional 6.1" }
+        },
+        { "source": "dhcp_option55", "value": [1, 15, 3, 6, 44, 46, 47, 31, 33, 121, 249, 43, 252] }
+      ],
+      "expect": { "label": "windows-7", "band": "high" }
+    },
+    {
+      "name": "Android 14 phone",
+      "observations": [
+        { "source": "dhcp_vendor_class", "value": "android-dhcp-14" },
+        { "source": "dhcp_option55", "value": [1, 3, 6, 15, 26, 28, 51, 58, 59, 43] },
+        {
+          "source": "tcp_syn",
+          "value": { "ttl": 64, "df": true, "mss": 1460, "window": 65535, "wscale": 9, "options": "mss,sok,ts,nop,ws" }
+        },
+        { "source": "http_user_agent", "value": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36" }
+      ],
+      "expect": { "label": "android", "band": "high", "detail": "Android 14" }
+    },
+    {
+      "name": "iPhone",
+      "observations": [
+        { "source": "dhcp_option55", "value": [1, 121, 3, 6, 15, 108, 114, 119, 252] },
+        {
+          "source": "tcp_syn",
+          "value": { "ttl": 64, "df": true, "mss": 1460, "window": 65535, "wscale": 6, "options": "mss,nop,ws,nop,nop,ts,sok,eol,eol" }
+        },
+        { "source": "http_user_agent", "value": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1" }
+      ],
+      "expect": { "label": "ios", "band": "medium", "detail": "iOS 17.6.1" }
+    },
+    {
+      "name": "Mac with a frozen browser User-Agent",
+      "observations": [
+        { "source": "dhcp_option55", "value": [1, 121, 3, 6, 15, 108, 114, 119, 252, 95, 44, 46] },
+        {
+          "source": "tcp_syn",
+          "value": { "ttl": 64, "df": true, "mss": 1460, "window": 65535, "wscale": 6, "options": "mss,nop,ws,nop,nop,ts,sok,eol" }
+        },
+        { "source": "http_user_agent", "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" }
+      ],
+      "expect": { "label": "macos", "band": "medium" }
+    },
+    {
+      "name": "Ubuntu 22.04 server",
+      "observations": [
+        { "source": "ssh_banner", "value": "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.10" },
+        { "source": "http_server", "value": "Apache/2.4.52 (Ubuntu)" },
+        {
+          "source": "tcp_syn",
+          "value": { "ttl": 64, "df": true, "mss": 1460, "window": 64240, "wscale": 7, "options": "mss,sok,ts,nop,ws" }
+        }
+      ],
+      "expect": { "label": "ubuntu-22.04", "band": "medium", "services": ["Apache httpd 2.4.52", "OpenSSH 8.9p1"] }
+    },
+    {
+      "name": "Debian 12 seen only by SSH",
+      "observations": [
+        { "source": "ssh_banner", "value": "SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u3" }
+      ],
+      "expect": { "label": "debian-12", "band": "medium", "services": ["OpenSSH 9.2p1"] }
+    },
+    {
+      "name": "Generic Linux SYN only",
+      "observations": [
+        {
+          "source": "tcp_syn",
+          "value": { "ttl": 57, "df": true, "mss": 1400, "window": 28000, "wscale": 7, "options": "mss,sok,ts,nop,ws" }
+        }
+      ],
+      "expect": { "label": "linux", "band": "medium", "detail": "Linux 3.x or 4.x kernel" }
+    },
+    {
+      "name": "Home router: udhcpc and Dropbear",
+      "observations": [
+        { "source": "dhcp_vendor_class", "value": "udhcp 1.36.1" },
+        { "source": "ssh_banner", "value": "SSH-2.0-dropbear_2022.83" }
+      ],
+      "expect": { "label": "embedded-linux", "band": "high", "services": ["Dropbear SSH 2022.83"] }
+    },
+    {
+      "name": "Cisco switch: one moderate signature is not enough to say IOS, so it falls back to network device",
+      "observations": [
+        { "source": "ssh_banner", "value": "SSH-2.0-Cisco-1.25" },
+        {
+          "source": "ip_ttl",
+          "value": { "ttl": 255 }
+        }
+      ],
+      "expect": { "label": "network-device", "band": "medium", "services": ["Cisco SSH 1.25"] }
+    },
+    {
+      "name": "Samba NAS",
+      "observations": [
+        {
+          "source": "smb_native_os",
+          "value": { "native_os": "Unix", "native_lanman": "Samba 4.19.5-Debian" }
+        },
+        {
+          "source": "ntlmssp_version",
+          "value": { "major": 6, "minor": 1, "build": 0 }
+        },
+        {
+          "source": "ip_ttl",
+          "value": { "ttl": 64 }
+        }
+      ],
+      "expect": { "label": "unix-like", "band": "medium", "services": ["Samba 4.19.5-Debian"] }
+    },
+    {
+      "name": "FreeBSD firewall: SYN and SSH agree",
+      "observations": [
+        {
+          "source": "tcp_syn",
+          "value": { "ttl": 64, "df": true, "mss": 1460, "window": 65535, "wscale": 6, "options": "mss,nop,ws,sok,ts" }
+        },
+        { "source": "ssh_banner", "value": "SSH-2.0-OpenSSH_9.7 FreeBSD-20240318" }
+      ],
+      "expect": { "label": "freebsd", "band": "high", "services": ["OpenSSH 9.7"] }
+    },
+    {
+      "name": "Conflicting evidence lowers confidence: Windows SYN with a Linux User-Agent",
+      "observations": [
+        {
+          "source": "tcp_syn",
+          "value": { "ttl": 128, "df": true, "mss": 1460, "window": 64240, "wscale": 8, "options": "mss,nop,ws,nop,nop,sok" }
+        },
+        { "source": "http_user_agent", "value": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" }
+      ],
+      "expect": { "label": "windows-nt10", "band": "low" }
+    },
+    {
+      "name": "TTL alone is too weak to name an OS",
+      "observations": [
+        {
+          "source": "ip_ttl",
+          "value": { "ttl": 50 }
+        }
+      ],
+      "expect": { "label": null, "band": "low" }
+    },
+    {
+      "name": "Nothing recognised",
+      "observations": [
+        { "source": "http_user_agent", "value": "curl/8.5.0" }
+      ],
+      "expect": { "label": null, "band": "low" }
+    }
+  ]
+}

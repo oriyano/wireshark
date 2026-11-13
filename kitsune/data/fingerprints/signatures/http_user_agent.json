@@ -1,0 +1,201 @@
+{
+  "kind": "signatures",
+  "source": "http_user_agent",
+  "schema_version": 1,
+  "review_status": "draft",
+  "description": "HTTP User-Agent request header, matched with a regular expression anywhere in the value (use ^ and $ to anchor). Signatures are tried in order and the first match wins, so specific patterns come before general ones. Browsers freeze the OS token (Windows NT 10.0, Mac OS X 10_15_7, Android 10; K), so those map to coarse labels on purpose.",
+  "signatures": [
+    {
+      "id": "ua-ms-cryptoapi-10",
+      "label": "windows-nt10",
+      "strength": "strong",
+      "match": { "pattern": "^Microsoft-CryptoAPI/10\\.0$" },
+      "examples": ["Microsoft-CryptoAPI/10.0"],
+      "notes": "Certificate revocation and AIA fetches made by Windows itself, so not affected by browser UA freezing."
+    },
+    {
+      "id": "ua-ms-cryptoapi-legacy",
+      "label": "windows-legacy",
+      "strength": "strong",
+      "match": { "pattern": "^Microsoft-CryptoAPI/(?P<version>[56]\\.\\d)$" },
+      "examples": ["Microsoft-CryptoAPI/6.1"],
+      "detail": "Windows NT {version}"
+    },
+    {
+      "id": "ua-windows-update",
+      "label": "windows-nt10",
+      "strength": "strong",
+      "match": { "pattern": "^(?:Windows-Update-Agent/10\\.0|Microsoft-Delivery-Optimization/10\\.0)" },
+      "examples": ["Windows-Update-Agent/10.0.10011.16384 Client-Protocol/2.71", "Microsoft-Delivery-Optimization/10.0"],
+      "notes": "Windows Update and Delivery Optimization on Windows 10, 11 and Server 2016+."
+    },
+    {
+      "id": "ua-ms-ncsi",
+      "label": "windows",
+      "strength": "strong",
+      "match": { "pattern": "^Microsoft NCSI$" },
+      "examples": ["Microsoft NCSI"],
+      "notes": "Windows network connectivity status probe."
+    },
+    {
+      "id": "ua-android-reduced",
+      "label": "android",
+      "strength": "moderate",
+      "match": { "pattern": "\\(Linux; Android 10; K\\)" },
+      "examples": ["Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"],
+      "notes": "Chrome's reduced User-Agent always says Android 10 with model K, so the version is not known."
+    },
+    {
+      "id": "ua-android",
+      "label": "android",
+      "strength": "strong",
+      "match": { "pattern": "Android (?P<version>\\d+(?:\\.\\d+)*)" },
+      "examples": ["Dalvik/2.1.0 (Linux; U; Android 13; Pixel 7 Build/TQ3A.230901.001)", "Mozilla/5.0 (Android 14; Mobile; rv:133.0) Gecko/133.0 Firefox/133.0"],
+      "detail": "Android {version}",
+      "notes": "Also matches Dalvik (Android apps), which reports the real version."
+    },
+    {
+      "id": "ua-chromeos",
+      "label": "chromeos",
+      "strength": "strong",
+      "match": { "pattern": "\\bCrOS\\b" },
+      "examples": ["Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"]
+    },
+    {
+      "id": "ua-ios",
+      "label": "ios",
+      "strength": "strong",
+      "match": { "pattern": "\\((?:iPhone|iPad|iPod)(?: touch)?;.*? OS (?P<version>\\d+(?:_\\d+)*) like Mac OS X" },
+      "examples": ["Mozilla/5.0 (iPhone; CPU iPhone OS 17_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1", "Mozilla/5.0 (iPad; CPU OS 16_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"],
+      "detail": "iOS {version}",
+      "notes": "iPadOS in desktop mode sends a Mac User-Agent and will match ua-macos-frozen instead."
+    },
+    {
+      "id": "ua-apple-cfnetwork",
+      "label": "apple",
+      "strength": "strong",
+      "match": { "pattern": "CFNetwork/[\\d.]+ Darwin/(?P<version>\\d+(?:\\.\\d+)*)" },
+      "examples": ["Weather/1 CFNetwork/1494.0.7 Darwin/23.4.0"],
+      "detail": "Darwin {version}",
+      "notes": "Native apps on macOS and iOS. The Darwin version maps to an OS release but is shared by macOS and iOS."
+    },
+    {
+      "id": "ua-apple-captive",
+      "label": "apple",
+      "strength": "strong",
+      "match": { "pattern": "^CaptiveNetworkSupport" },
+      "examples": ["CaptiveNetworkSupport-481.0.1 wispr"],
+      "notes": "Captive portal probe sent by macOS and iOS."
+    },
+    {
+      "id": "ua-windows-nt10",
+      "label": "windows-client",
+      "strength": "moderate",
+      "match": { "pattern": "Windows NT 10\\.0" },
+      "examples": ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"],
+      "notes": "Browsers send Windows NT 10.0 on both Windows 10 and 11 (and on Server 2016+), so this cannot tell them apart."
+    },
+    {
+      "id": "ua-windows-8.1",
+      "label": "windows-8.1",
+      "strength": "strong",
+      "match": { "pattern": "Windows NT 6\\.3" },
+      "examples": ["Mozilla/5.0 (Windows NT 6.3; Win64; x64; rv:115.0) Gecko/20100101 Firefox/115.0"]
+    },
+    {
+      "id": "ua-windows-8",
+      "label": "windows-8",
+      "strength": "strong",
+      "match": { "pattern": "Windows NT 6\\.2" },
+      "examples": ["Mozilla/5.0 (Windows NT 6.2; WOW64; Trident/7.0; rv:11.0) like Gecko"]
+    },
+    {
+      "id": "ua-windows-7",
+      "label": "windows-7",
+      "strength": "strong",
+      "match": { "pattern": "Windows NT 6\\.1" },
+      "examples": ["Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"]
+    },
+    {
+      "id": "ua-windows-vista",
+      "label": "windows-vista",
+      "strength": "strong",
+      "match": { "pattern": "Windows NT 6\\.0" },
+      "examples": ["Mozilla/5.0 (Windows NT 6.0; rv:52.0) Gecko/20100101 Firefox/52.0"]
+    },
+    {
+      "id": "ua-windows-xp",
+      "label": "windows-xp",
+      "strength": "strong",
+      "match": { "pattern": "Windows NT 5\\.[12]" },
+      "examples": ["Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1; Trident/4.0)"]
+    },
+    {
+      "id": "ua-macos-frozen",
+      "label": "macos",
+      "strength": "moderate",
+      "match": { "pattern": "Macintosh; Intel Mac OS X 10[_.]15[_.]7\\b" },
+      "examples": ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15"],
+      "notes": "Chrome, Edge and Safari freeze the macOS version at 10.15.7, and Apple Silicon Macs also say Intel."
+    },
+    {
+      "id": "ua-macos",
+      "label": "macos",
+      "strength": "strong",
+      "match": { "pattern": "Mac OS X (?P<version>1\\d[_.]\\d+(?:[_.]\\d+)?)" },
+      "examples": ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:115.0) Gecko/20100101 Firefox/115.0", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.2 Safari/605.1.15"],
+      "detail": "macOS {version}",
+      "notes": "Firefox and older browsers report the real version (Firefox caps it at 10.15)."
+    },
+    {
+      "id": "ua-apt",
+      "label": "debian-family",
+      "strength": "strong",
+      "match": { "pattern": "^Debian APT-HTTP/" },
+      "examples": ["Debian APT-HTTP/1.3 (2.4.12)"],
+      "notes": "apt on Debian, Ubuntu and their derivatives all send this."
+    },
+    {
+      "id": "ua-dnf",
+      "label": "rhel-family",
+      "strength": "strong",
+      "match": { "pattern": "^(?:libdnf|dnf/)" },
+      "examples": ["libdnf (Rocky Linux 9.4; generic; Linux.x86_64)"]
+    },
+    {
+      "id": "ua-ubuntu",
+      "label": "ubuntu",
+      "strength": "moderate",
+      "match": { "pattern": "; Ubuntu;" },
+      "examples": ["Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0"]
+    },
+    {
+      "id": "ua-fedora",
+      "label": "rhel-family",
+      "strength": "moderate",
+      "match": { "pattern": "; Fedora;" },
+      "examples": ["Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0"]
+    },
+    {
+      "id": "ua-freebsd",
+      "label": "freebsd",
+      "strength": "strong",
+      "match": { "pattern": "FreeBSD" },
+      "examples": ["Mozilla/5.0 (X11; FreeBSD amd64; rv:128.0) Gecko/20100101 Firefox/128.0"]
+    },
+    {
+      "id": "ua-openbsd",
+      "label": "openbsd",
+      "strength": "strong",
+      "match": { "pattern": "OpenBSD" },
+      "examples": ["Mozilla/5.0 (X11; OpenBSD amd64; rv:128.0) Gecko/20100101 Firefox/128.0"]
+    },
+    {
+      "id": "ua-linux-desktop",
+      "label": "linux",
+      "strength": "moderate",
+      "match": { "pattern": "X11; (?:[^;)]+; )?Linux" },
+      "examples": ["Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"]
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "kind": "signatures",
+  "source": "ip_ttl",
+  "schema_version": 1,
+  "review_status": "draft",
+  "description": "Initial IP TTL (IPv4) or hop limit (IPv6) defaults. Kitsune infers the initial value as the smallest of 32, 64, 128 or 255 that is at least the observed value. Only use packets the host sent itself (its own source address), never routed or relayed traffic.",
+  "signatures": [
+    {
+      "id": "ttl-128",
+      "label": "windows",
+      "strength": "moderate",
+      "match": { "initial_ttl": 128 },
+      "notes": "Windows has used 128 since NT 4. A few other stacks (some printers, older Novell) also use 128."
+    },
+    {
+      "id": "ttl-64",
+      "label": "unix-like",
+      "strength": "weak",
+      "match": { "initial_ttl": 64 },
+      "notes": "Linux, Android, macOS, iOS and the BSDs all default to 64, so this only separates Unix-like hosts from Windows."
+    },
+    {
+      "id": "ttl-255",
+      "label": "network-device",
+      "strength": "weak",
+      "match": { "initial_ttl": 255 },
+      "notes": "Cisco IOS and many routers and switches use 255; Solaris and some Unix ICMP replies do too."
+    }
+  ]
+}
