@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "product": "kitsune",
+  "channel": "stable",
+  "serial": 2026111301,
+  "published": "2026-11-13T00:00:00Z",
+  "expires": "2026-12-13T00:00:00Z",
+  "min_supported_version": "0.1.0",
+  "latest": {
+    "version": "0.2.0",
+    "notes_url": "https://github.com/oriyano/wireshark/releases/tag/kitsune-v0.2.0",
+    "critical": false,
+    "files": [
+      {
+        "platform": "windows-x64",
+        "kind": "msi",
+        "url": "https://github.com/oriyano/wireshark/releases/download/kitsune-v0.2.0/Kitsune-0.2.0-x64.msi",
+        "size": 98304512,
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  }
+}

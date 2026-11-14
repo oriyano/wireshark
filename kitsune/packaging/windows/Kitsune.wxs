@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Kitsune.wxs
+
+  Windows Installer (.msi) package for Kitsune. Built with WiX Toolset
+  v5 or later (the <Files> harvesting element is new in v5). Use
+  build-msi.ps1 to stage the files and run "wix build"; it passes the
+  preprocessor variables below.
+
+  Required variables:
+    StagingDir      Folder with kitsune.exe, dumpcap.exe, the engine and
+                    Qt DLLs, and the QML modules (windeployqt output)
+    KitsuneVersion  Four-part version, e.g. 0.2.0.0
+    LicenseRtf      Path to the license shown during installation
+
+  Optional variables:
+    IconPath        .ico for Add/Remove Programs and file types
+    BannerBmp       493x58 banner bitmap
+    DialogBmp       493x312 welcome/finish bitmap
+
+  SPDX-License-Identifier: GPL-2.0-or-later
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <!-- Never change UpgradeCode: every Kitsune release shares it, which is
+       how a new .msi finds and replaces the old one (MajorUpgrade). -->
+  <Package Name="Kitsune"
+           Manufacturer="Kitsune Project"
+           Version="$(var.KitsuneVersion)"
+           UpgradeCode="44521a19-2c5b-4c4d-b486-2aaa05ba0b58"
+           Scope="perMachine"
+           Compressed="yes"
+           Language="1033">
+
+    <SummaryInformation Description="Kitsune network analyzer for training and education" />
+
+    <!-- Same-version upgrades let nightly builds, which can share a
+         version, replace each other instead of installing side by side. -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of Kitsune is already installed." />
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Launch Condition="Installed OR VersionNT64"
+            Message="Kitsune needs a 64-bit edition of Windows 10 or later." />
+
+    <!-- ===== Add/Remove Programs ===== -->
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/oriyano/wireshark" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://github.com/oriyano/wireshark/releases" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <?ifdef IconPath ?>
+    <Icon Id="KitsuneIcon" SourceFile="$(var.IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="KitsuneIcon" />
+    <?endif?>
+
+    <!-- ===== Options settable on the msiexec command line =====
+         msiexec /i Kitsune.msi /qn DESKTOP_SHORTCUT=1 UPDATES=0
+         UPDATES          1 (default) checks for updates, 0 turns it off
+         UPDATE_CHANNEL   stable (default) or beta
+         UPDATE_MANIFEST  URL of a school's own update mirror
+         Group Policy keys under HKLM\SOFTWARE\Policies\Kitsune override
+         all three; see ../updates/README.md. -->
+    <Property Id="DESKTOP_SHORTCUT" Secure="yes" />
+    <Property Id="UPDATES" Value="1" Secure="yes" />
+    <Property Id="UPDATE_CHANNEL" Value="stable" Secure="yes" />
+    <Property Id="UPDATE_MANIFEST" Secure="yes" />
+
+    <!-- ===== Npcap detection =====
+         Npcap's free license does not let us redistribute its installer,
+         so the .msi never installs it. It detects Npcap and, when it is
+         missing, offers to open the official download page at the end.
+         Kitsune itself repeats the check at run time. -->
+    <Property Id="NPCAP_VERSION">
+      <RegistrySearch Root="HKLM"
+                      Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NpcapInst"
+                      Name="DisplayVersion" Type="raw" Bitness="always64" />
+    </Property>
+    <Property Id="NPCAP_VERSION32">
+      <RegistrySearch Root="HKLM"
+                      Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NpcapInst"
+                      Name="DisplayVersion" Type="raw" Bitness="always32" />
+    </Property>
+    <SetProperty Id="NPCAP_VERSION" Value="[NPCAP_VERSION32]"
+                 After="AppSearch" Sequence="both"
+                 Condition="NOT NPCAP_VERSION AND NPCAP_VERSION32" />
+
+    <SetProperty Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT"
+                 Value="Open the Npcap download page (Npcap is needed to capture live traffic)"
+                 After="AppSearch" Sequence="ui"
+                 Condition="NOT NPCAP_VERSION AND NOT Installed" />
+    <SetProperty Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1"
+                 After="AppSearch" Sequence="ui"
+                 Condition="NOT NPCAP_VERSION AND NOT Installed" />
+
+    <Property Id="WixShellExecTarget" Value="https://npcap.com/#download" />
+    <CustomAction Id="OpenNpcapDownloadPage"
+                  BinaryRef="Wix4UtilCA_X64"
+                  DllEntry="WixShellExec"
+                  Impersonate="yes"
+                  Return="ignore" />
+
+    <!-- ===== Directories ===== -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Kitsune" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+    <StandardDirectory Id="DesktopFolder" />
+
+    <!-- ===== Features ===== -->
+    <Feature Id="Main" Title="Kitsune" AllowAbsent="no">
+      <ComponentRef Id="KitsuneExe" />
+      <ComponentRef Id="DumpcapExe" />
+      <ComponentGroupRef Id="RuntimeFiles" />
+      <ComponentRef Id="AppRegistration" />
+      <ComponentRef Id="CaptureFileTypes" />
+      <ComponentRef Id="UpdateSettings" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+    <!-- ===== UI ===== -->
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+    <?ifdef BannerBmp ?>
+    <WixVariable Id="WixUIBannerBmp" Value="$(var.BannerBmp)" />
+    <?endif?>
+    <?ifdef DialogBmp ?>
+    <WixVariable Id="WixUIDialogBmp" Value="$(var.DialogBmp)" />
+    <?endif?>
+
+    <!-- There is deliberately no "Launch Kitsune" box on the last page:
+         when msiexec runs elevated, Kitsune would start as administrator,
+         and the user interface must never run with admin rights. -->
+    <UI>
+      <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+      <Publish Dialog="ExitDialog" Control="Finish"
+               Event="DoAction" Value="OpenNpcapDownloadPage"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+    </UI>
+  </Package>
+
+  <!-- ===== Program files ===== -->
+  <Fragment>
+    <Component Id="KitsuneExe" Directory="INSTALLFOLDER">
+      <File Id="KitsuneExeFile" Source="$(var.StagingDir)\kitsune.exe" KeyPath="yes">
+        <Shortcut Id="StartMenuShortcut"
+                  Directory="ProgramMenuFolder"
+                  Name="Kitsune"
+                  Description="Learn and analyze network traffic"
+                  WorkingDirectory="INSTALLFOLDER" />
+      </File>
+    </Component>
+
+    <!-- dumpcap is the capture helper: Kitsune runs it as a separate,
+         unprivileged process instead of opening adapters itself. With
+         Npcap installed without "Restrict driver access to
+         Administrators", ordinary users can capture and neither process
+         needs admin rights. -->
+    <Component Id="DumpcapExe" Directory="INSTALLFOLDER">
+      <File Id="DumpcapExeFile" Source="$(var.StagingDir)\dumpcap.exe" KeyPath="yes" />
+    </Component>
+
+    <!-- Everything else windeployqt and the engine build put in the
+         staging folder: DLLs, QML modules, Qt plugins, data files. -->
+    <ComponentGroup Id="RuntimeFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.StagingDir)\**">
+        <Exclude Files="$(var.StagingDir)\kitsune.exe" />
+        <Exclude Files="$(var.StagingDir)\dumpcap.exe" />
+      </Files>
+    </ComponentGroup>
+
+    <Component Id="AppRegistration" Directory="INSTALLFOLDER">
+      <RegistryKey Root="HKLM" Key="SOFTWARE\Kitsune">
+        <RegistryValue Name="InstallDir" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+        <RegistryValue Name="Version" Type="string" Value="$(var.KitsuneVersion)" />
+      </RegistryKey>
+    </Component>
+
+    <!-- Capture files: Kitsune adds itself to "Open with" and to Default
+         Apps, but does not take over .pcap or .pcapng from Wireshark or
+         anything else the user already uses. -->
+    <Component Id="CaptureFileTypes" Directory="INSTALLFOLDER">
+      <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\Kitsune.CaptureFile">
+        <RegistryValue Type="string" Value="Network capture file" KeyPath="yes" />
+        <RegistryValue Key="DefaultIcon" Type="string" Value="&quot;[#KitsuneExeFile]&quot;,0" />
+        <RegistryValue Key="shell\open\command" Type="string" Value="&quot;[#KitsuneExeFile]&quot; &quot;%1&quot;" />
+      </RegistryKey>
+      <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.pcapng\OpenWithProgids" Name="Kitsune.CaptureFile" Type="string" Value="" />
+      <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.pcap\OpenWithProgids" Name="Kitsune.CaptureFile" Type="string" Value="" />
+      <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.cap\OpenWithProgids" Name="Kitsune.CaptureFile" Type="string" Value="" />
+      <RegistryKey Root="HKLM" Key="SOFTWARE\Kitsune\Capabilities">
+        <RegistryValue Name="ApplicationName" Type="string" Value="Kitsune" />
+        <RegistryValue Name="ApplicationDescription" Type="string" Value="Network analyzer for training and education" />
+        <RegistryValue Key="FileAssociations" Name=".pcapng" Type="string" Value="Kitsune.CaptureFile" />
+        <RegistryValue Key="FileAssociations" Name=".pcap" Type="string" Value="Kitsune.CaptureFile" />
+        <RegistryValue Key="FileAssociations" Name=".cap" Type="string" Value="Kitsune.CaptureFile" />
+      </RegistryKey>
+      <RegistryValue Root="HKLM" Key="SOFTWARE\RegisteredApplications" Name="Kitsune" Type="string" Value="SOFTWARE\Kitsune\Capabilities" />
+    </Component>
+
+    <!-- Install-time update choices. Kitsune reads these, then lets
+         HKLM\SOFTWARE\Policies\Kitsune\Updates override them. -->
+    <Component Id="UpdateSettings" Directory="INSTALLFOLDER">
+      <RegistryKey Root="HKLM" Key="SOFTWARE\Kitsune\Updates">
+        <RegistryValue Name="Enabled" Type="integer" Value="[UPDATES]" KeyPath="yes" />
+        <RegistryValue Name="Channel" Type="string" Value="[UPDATE_CHANNEL]" />
+        <RegistryValue Name="ManifestUrl" Type="string" Value="[UPDATE_MANIFEST]" />
+      </RegistryKey>
+    </Component>
+
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Condition="DESKTOP_SHORTCUT = 1">
+      <Shortcut Id="DesktopShortcut"
+                Name="Kitsune"
+                Target="[#KitsuneExeFile]"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RegistryValue Root="HKLM" Key="SOFTWARE\Kitsune" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+  </Fragment>
+</Wix>
