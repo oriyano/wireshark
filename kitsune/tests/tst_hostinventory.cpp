@@ -207,5 +207,10 @@ private slots:
     }
 };
 
-QTEST_GUILESS_MAIN(TestHostInventory)
+int runHostInventoryTests(int argc, char *argv[])
+{
+    TestHostInventory test;
+    return QTest::qExec(&test, argc, argv);
+}
+
 #include "tst_hostinventory.moc"

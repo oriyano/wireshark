@@ -24,6 +24,7 @@
 
 #include <cstdio>
 
+#include "capture/capturesession.h"
 #include "engine/captureengine.h"
 #include "engine/kitsunesettings.h"
 #include "models/hostmodels.h"
@@ -187,6 +188,20 @@ int main(int argc, char *argv[])
                                     QStringLiteral("Use <mode> for this run: system, light or dark."),
                                     QStringLiteral("mode"));
     parser.addOption(theme_option);
+    QCommandLineOption capture_option(QStringLiteral("capture"),
+                                      QStringLiteral("Start a live capture on <interface>."), QStringLiteral("interface"));
+    parser.addOption(capture_option);
+    QCommandLineOption capture_seconds_option(QStringLiteral("capture-seconds"),
+                                              QStringLiteral("With --capture, stop after <seconds>."), QStringLiteral("seconds"));
+    parser.addOption(capture_seconds_option);
+    QCommandLineOption ring_option(QStringLiteral("ring-buffer"),
+                                   QStringLiteral("Capture to a ring buffer of <files> files of <MB> megabytes each."),
+                                   QStringLiteral("files:MB"));
+    parser.addOption(ring_option);
+    QCommandLineOption shot_delay_option(QStringLiteral("screenshot-delay"),
+                                         QStringLiteral("Take the --screenshot after <ms> instead of once the file loads."),
+                                         QStringLiteral("ms"));
+    parser.addOption(shot_delay_option);
     parser.addPositionalArgument(QStringLiteral("file"), QStringLiteral("Capture file to open."));
     parser.process(app);
 
@@ -235,6 +250,7 @@ int main(int argc, char *argv[])
         HostListModel hosts(&engine);
         HostListModel subnet_hosts(&engine);
         KitsuneSettings settings;
+        CaptureSession capture(&engine);
         engine.setLargeFileMode(large_file_mode);
         if (!parser.isSet(large_file_option)) {
             /* The switch in the interface changes the saved setting. */
@@ -256,6 +272,7 @@ int main(int argc, char *argv[])
         qml.rootContext()->setContextProperty(QStringLiteral("hostModel"), &hosts);
         qml.rootContext()->setContextProperty(QStringLiteral("subnetHostModel"), &subnet_hosts);
         qml.rootContext()->setContextProperty(QStringLiteral("kitsuneSettings"), &settings);
+        qml.rootContext()->setContextProperty(QStringLiteral("captureSession"), &capture);
         QObject::connect(&qml, &QQmlApplicationEngine::objectCreationFailed,
                          &app, []() { QCoreApplication::exit(-1); }, Qt::QueuedConnection);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
@@ -303,6 +320,27 @@ int main(int argc, char *argv[])
             engine.openPath(files.first());
         }
 
+        if (parser.isSet(ring_option)) {
+            const QStringList ring = parser.value(ring_option).split(QLatin1Char(':'));
+            capture.setRingBuffer(true);
+            capture.setRingFiles(ring.value(0).toInt());
+            capture.setRingFileMegabytes(ring.value(1, QStringLiteral("1")).toInt());
+        }
+        if (parser.isSet(capture_option)) {
+            if (!parser.isSet(view_option)) {
+                qml.rootObjects().first()->setProperty("currentView", QStringLiteral("packets"));
+            }
+            capture.start(parser.value(capture_option));
+            if (parser.isSet(apply_filter_option)) {
+                /* A display filter that keeps up as packets arrive. */
+                const QString filter = parser.value(apply_filter_option);
+                QTimer::singleShot(1500, &engine, [&engine, filter]() { engine.applyFilter(filter); });
+            }
+            if (parser.isSet(capture_seconds_option)) {
+                QTimer::singleShot(parser.value(capture_seconds_option).toInt() * 1000, &capture, &CaptureSession::stop);
+            }
+        }
+
         if (parser.isSet(screenshot_option)) {
             const QString shot_path = parser.value(screenshot_option);
             QObject *root = qml.rootObjects().first();
@@ -312,7 +350,9 @@ int main(int argc, char *argv[])
                 }
                 QCoreApplication::quit();
             };
-            if (!files.isEmpty()) {
+            if (parser.isSet(shot_delay_option)) {
+                QTimer::singleShot(parser.value(shot_delay_option).toInt(), take_shot);
+            } else if (!files.isEmpty()) {
                 QObject::connect(&engine, &CaptureEngine::loaded, root, [take_shot]() {
                     QTimer::singleShot(800, take_shot);
                 });

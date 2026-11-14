@@ -83,7 +83,7 @@ void EngineWorker::setLargeFileMode(bool on)
     prefs_apply_all();
 }
 
-void EngineWorker::openFile(const QString &path, int generation)
+bool EngineWorker::openWtap(const QString &path, int generation)
 {
     closeFile();
     file_generation_ = generation;
@@ -107,7 +107,7 @@ void EngineWorker::openFile(const QString &path, int generation)
             g_free(err_info);
         }
         emit openFailed(message, file_generation_);
-        return;
+        return false;
     }
 
     cf_->provider.wth = wth;
@@ -137,8 +137,52 @@ void EngineWorker::openFile(const QString &path, int generation)
     err = 0;
     const qint64 size = wtap_file_size(wth, &err);
     emit opened(path, QString::fromUtf8(wtap_file_type_subtype_description(cf_->cd_t)), size, file_generation_);
+    return true;
+}
 
-    runFirstPass();
+void EngineWorker::openFile(const QString &path, int generation)
+{
+    live_ = false;
+    if (openWtap(path, generation)) {
+        runFirstPass();
+    }
+}
+
+void EngineWorker::openLive(const QString &path, int generation)
+{
+    if (!openWtap(path, generation)) {
+        return;
+    }
+    live_ = true;
+    live_pending_ = 0;
+    live_last_inventory_ = 0;
+    beginPass();
+}
+
+void EngineWorker::continueLive(int new_packets, int generation)
+{
+    if (!live_ || !pass_ || generation != file_generation_) {
+        return;
+    }
+    live_pending_ += new_packets;
+    const qint64 read = readPackets(live_pending_);
+    live_pending_ -= read;
+    if (cancel) {
+        cancel = false;     /* a filter change interrupted us; pending packets stay pending */
+    }
+    finishLiveBatch(false);
+}
+
+void EngineWorker::finishLive(int generation)
+{
+    if (!live_ || !pass_ || generation != file_generation_) {
+        return;
+    }
+    cancel = false;
+    readPackets(-1);        /* dumpcap has stopped, so the file is complete */
+    live_ = false;
+    finishLiveBatch(true);
+    endPass();
 }
 
 /* Sequential read of the whole file: builds the frame table, lets the
@@ -146,65 +190,142 @@ void EngineWorker::openFile(const QString &path, int generation)
  * inventory. */
 void EngineWorker::runFirstPass()
 {
-    QElapsedTimer timer;
-    timer.start();
+    beginPass();
+    readPackets(-1);
+    endPass();
+}
 
+struct EngineWorker::Pass {
+    QElapsedTimer timer;
+    wtap_rec rec;
+    epan_dissect_t *edt_tree = nullptr;
+    epan_dissect_t *edt_fast = nullptr;
+    int64_t file_size = 0;
+    qint64 last_report = 0;
     int err = 0;
     char *err_info = nullptr;
-    int64_t data_offset = 0;
-    wtap_rec rec;
-    static frame_data ref_frame;
-    const int64_t file_size = wtap_file_size(cf_->provider.wth, &err);
-    err = 0;
+    QVector<quint32> new_displayed;     /* live: frames read since the last report that pass the filter */
+};
+
+static frame_data ref_frame;
+
+void EngineWorker::beginPass()
+{
+    delete pass_;
+    pass_ = new Pass;
+    pass_->timer.start();
+    int err = 0;
+    pass_->file_size = wtap_file_size(cf_->provider.wth, &err);
 
     inventory_.clear();
     /* Building a protocol tree roughly doubles the cost of dissection,
      * so only packets that can tell the inventory something beyond
      * addresses and counts get one (see HostInventory::peek). */
-    epan_dissect_t *edt_tree = epan_dissect_new(cf_->epan, true, false);
-    epan_dissect_t *edt_fast = epan_dissect_new(cf_->epan, false, false);
-    wtap_rec_init(&rec, 2048);
+    pass_->edt_tree = epan_dissect_new(cf_->epan, true, false);
+    pass_->edt_fast = epan_dissect_new(cf_->epan, false, false);
+    wtap_rec_init(&pass_->rec, 2048);
+}
 
-    qint64 last_report = 0;
-    while (!cancel && wtap_read(cf_->provider.wth, &rec, &err, &err_info, &data_offset)) {
+qint64 EngineWorker::readPackets(qint64 limit)
+{
+    Pass &p = *pass_;
+    int64_t data_offset = 0;
+    qint64 read = 0;
+    while (!cancel && (limit < 0 || read < limit)) {
+        if (live_) {
+            wtap_cleareof(cf_->provider.wth);
+        }
+        if (!wtap_read(cf_->provider.wth, &p.rec, &p.err, &p.err_info, &data_offset)) {
+            break;
+        }
         frame_data fdlocal;
-        frame_data_init(&fdlocal, cf_->count + 1, &rec, data_offset, cf_->cum_bytes);
+        frame_data_init(&fdlocal, cf_->count + 1, &p.rec, data_offset, cf_->cum_bytes);
         frame_data_set_before_dissect(&fdlocal, &cf_->elapsed_time, &cf_->provider.ref, cf_->provider.prev_dis);
         if (cf_->provider.ref == &fdlocal) {
             ref_frame = fdlocal;
             cf_->provider.ref = &ref_frame;
         }
 
-        const HostInventory::Peek peek = rec.rec_type == REC_TYPE_PACKET
-            ? HostInventory::peek(rec.rec_header.packet_header.pkt_encap, ws_buffer_start_ptr(&rec.data),
-                                  rec.rec_header.packet_header.caplen)
+        const HostInventory::Peek peek = p.rec.rec_type == REC_TYPE_PACKET
+            ? HostInventory::peek(p.rec.rec_header.packet_header.pkt_encap, ws_buffer_start_ptr(&p.rec.data),
+                                  p.rec.rec_header.packet_header.caplen)
             : HostInventory::Peek();
-        epan_dissect_t *edt = peek.needsTree ? edt_tree : edt_fast;
+        /* A live display filter needs the tree too. */
+        const bool filtering = live_ && live_dfcode_;
+        epan_dissect_t *edt = peek.needsTree || filtering ? p.edt_tree : p.edt_fast;
         if (peek.needsTree) {
             inventory_.primeDissection(edt);
         }
-        epan_dissect_run(edt, cf_->cd_t, &rec, &fdlocal, NULL);
+        if (filtering) {
+            epan_dissect_prime_with_dfilter(edt, live_dfcode_);
+        }
+        epan_dissect_run(edt, cf_->cd_t, &p.rec, &fdlocal, NULL);
         inventory_.addPacket(edt, &fdlocal, peek);
+        if (live_ && (!filtering || dfilter_apply_edt(live_dfcode_, edt))) {
+            p.new_displayed.append(fdlocal.num);
+        }
 
         frame_data_set_after_dissect(&fdlocal, &cf_->cum_bytes);
         cf_->provider.prev_cap = cf_->provider.prev_dis =
             frame_data_sequence_add(cf_->provider.frames, &fdlocal);
         cf_->count++;
+        read++;
         epan_dissect_reset(edt);
-        wtap_rec_reset(&rec);
+        wtap_rec_reset(&p.rec);
 
-        const qint64 now = timer.elapsed();
-        if (now - last_report >= 100) {
-            last_report = now;
-            const double progress = file_size > 0 ?
-                static_cast<double>(wtap_read_so_far(cf_->provider.wth)) / static_cast<double>(file_size) : 0.0;
+        const qint64 now = p.timer.elapsed();
+        if (!live_ && now - p.last_report >= 100) {
+            p.last_report = now;
+            const double progress = p.file_size > 0 ?
+                static_cast<double>(wtap_read_so_far(cf_->provider.wth)) / static_cast<double>(p.file_size) : 0.0;
             emit loadProgress(progress, static_cast<int>(cf_->count), file_generation_);
         }
     }
+    return read;
+}
 
-    epan_dissect_free(edt_tree);
-    epan_dissect_free(edt_fast);
-    wtap_rec_cleanup(&rec);
+/* Live capture: report what this batch added. The inventory is
+ * re-sent at most once a second, as it copies every host. */
+void EngineWorker::finishLiveBatch(bool final)
+{
+    if (!pass_) {
+        return;
+    }
+    emit liveProgress(static_cast<int>(cf_->count), pass_->new_displayed, durationText(), file_generation_);
+    pass_->new_displayed.clear();
+    const qint64 now = pass_->timer.elapsed();
+    if (!final && now - live_last_inventory_ >= 1000) {
+        live_last_inventory_ = now;
+        emit inventoryReady(inventory_.snapshot(), file_generation_);
+    }
+}
+
+QString EngineWorker::durationText() const
+{
+    if (cf_->count == 0 || !cf_->provider.frames) {
+        return QString();
+    }
+    frame_data *first = frame_data_sequence_find(cf_->provider.frames, 1);
+    frame_data *last = frame_data_sequence_find(cf_->provider.frames, cf_->count);
+    if (!first || !last) {
+        return QString();
+    }
+    const qint64 secs = qMax<qint64>(0, last->abs_ts.secs - first->abs_ts.secs);
+    return QStringLiteral("%1:%2:%3")
+        .arg(secs / 3600, 2, 10, QLatin1Char('0'))
+        .arg((secs / 60) % 60, 2, 10, QLatin1Char('0'))
+        .arg(secs % 60, 2, 10, QLatin1Char('0'));
+}
+
+void EngineWorker::endPass()
+{
+    if (!pass_) {
+        return;
+    }
+    Pass &p = *pass_;
+    epan_dissect_free(p.edt_tree);
+    epan_dissect_free(p.edt_fast);
+    wtap_rec_cleanup(&p.rec);
     wtap_sequential_close(cf_->provider.wth);
     postseq_cleanup_all_protocols();
     cf_->provider.prev_dis = nullptr;
@@ -212,28 +333,18 @@ void EngineWorker::runFirstPass()
     cf_->state = FILE_READ_DONE;
 
     QString error;
-    if (err != 0) {
-        error = QString::fromUtf8(wtap_strerror(err));
-        if (err_info) {
-            error += QStringLiteral(" (%1)").arg(QString::fromUtf8(err_info));
+    if (p.err != 0) {
+        error = QString::fromUtf8(wtap_strerror(p.err));
+        if (p.err_info) {
+            error += QStringLiteral(" (%1)").arg(QString::fromUtf8(p.err_info));
         }
     }
-    g_free(err_info);
+    g_free(p.err_info);
 
-    QString duration;
-    if (cf_->count > 0) {
-        frame_data *first = frame_data_sequence_find(cf_->provider.frames, 1);
-        frame_data *last = frame_data_sequence_find(cf_->provider.frames, cf_->count);
-        if (first && last) {
-            qint64 secs = qMax<qint64>(0, last->abs_ts.secs - first->abs_ts.secs);
-            duration = QStringLiteral("%1:%2:%3")
-                .arg(secs / 3600, 2, 10, QLatin1Char('0'))
-                .arg((secs / 60) % 60, 2, 10, QLatin1Char('0'))
-                .arg(secs % 60, 2, 10, QLatin1Char('0'));
-        }
-    }
-
-    const qint64 elapsed = timer.elapsed();
+    const QString duration = durationText();
+    const qint64 elapsed = p.timer.elapsed();
+    delete pass_;
+    pass_ = nullptr;
     if (cancel) {
         return;     /* closed or replaced while loading */
     }
@@ -243,6 +354,20 @@ void EngineWorker::runFirstPass()
 
 void EngineWorker::closeFile()
 {
+    if (pass_) {
+        epan_dissect_free(pass_->edt_tree);
+        epan_dissect_free(pass_->edt_fast);
+        wtap_rec_cleanup(&pass_->rec);
+        g_free(pass_->err_info);
+        delete pass_;
+        pass_ = nullptr;
+    }
+    live_ = false;
+    live_pending_ = 0;
+    if (live_dfcode_) {
+        dfilter_free(live_dfcode_);
+        live_dfcode_ = nullptr;
+    }
     if (cf_->provider.wth) {
         wtap_close(cf_->provider.wth);
         cf_->provider.wth = nullptr;
@@ -262,9 +387,14 @@ void EngineWorker::closeFile()
     inventory_.clear();
 }
 
+bool EngineWorker::framesReadable() const
+{
+    return cf_->state == FILE_READ_DONE || (live_ && cf_->state == FILE_READ_IN_PROGRESS);
+}
+
 bool EngineWorker::dissectRow(quint32 frame, PacketRow &row)
 {
-    if (cf_->state != FILE_READ_DONE || !cf_->provider.frames || frame == 0 || frame > cf_->count) {
+    if (!framesReadable() || !cf_->provider.frames || frame == 0 || frame > cf_->count) {
         return false;
     }
     frame_data *fdata = frame_data_sequence_find(cf_->provider.frames, frame);
@@ -385,7 +515,7 @@ void EngineWorker::requestDetails(quint32 frame, int generation)
     details.frame = frame;
     details.root = ProtoNodePtr::create();
 
-    frame_data *fdata = (cf_->state == FILE_READ_DONE && cf_->provider.frames && frame > 0 && frame <= cf_->count)
+    frame_data *fdata = (framesReadable() && cf_->provider.frames && frame > 0 && frame <= cf_->count)
                         ? frame_data_sequence_find(cf_->provider.frames, frame) : nullptr;
     if (!fdata) {
         emit detailsReady(details, generation);
@@ -552,9 +682,13 @@ void EngineWorker::applyFilter(const QString &text, int generation)
     timer.start();
     QVector<quint32> matches;
 
-    if (cf_->state != FILE_READ_DONE || !cf_->provider.frames) {
+    if (cf_->state == FILE_CLOSED || !cf_->provider.frames) {
         emit filterApplied(text, matches, 0, generation);
         return;
+    }
+    if (live_dfcode_) {
+        dfilter_free(live_dfcode_);
+        live_dfcode_ = nullptr;
     }
 
     const QString trimmed = text.trimmed();
@@ -609,7 +743,11 @@ void EngineWorker::applyFilter(const QString &text, int generation)
 
     epan_dissect_cleanup(&edt);
     wtap_rec_cleanup(&rec);
-    dfilter_free(dfcode);
+    if (live_ && !cancel) {
+        live_dfcode_ = dfcode;      /* keep filtering packets as they arrive */
+    } else {
+        dfilter_free(dfcode);
+    }
 
     if (cancel) {
         return;     /* a newer filter replaced this one */

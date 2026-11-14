@@ -41,7 +41,7 @@ class CaptureEngine : public QObject
     Q_PROPERTY(QString filterText READ filterText NOTIFY filterChanged)
     Q_PROPERTY(bool filtering READ filtering NOTIFY filterChanged)
     Q_PROPERTY(double filterProgress READ filterProgress NOTIFY filterProgressChanged)
-    Q_PROPERTY(int displayedCount READ displayedCount NOTIFY displayedFramesChanged)
+    Q_PROPERTY(int displayedCount READ displayedCount NOTIFY displayedCountChanged)
     Q_PROPERTY(qint64 filterTimeMs READ filterTimeMs NOTIFY displayedFramesChanged)
 
     Q_PROPERTY(int selectedFrame READ selectedFrame NOTIFY selectedFrameChanged)
@@ -49,6 +49,9 @@ class CaptureEngine : public QObject
     /* Large-file mode trades TCP analysis (retransmission and
      * lost-segment flags) for about a third less memory. Changing it
      * reloads the open file. */
+    /* True while showing a capture that dumpcap is still writing. */
+    Q_PROPERTY(bool live READ live NOTIFY liveChanged)
+
     Q_PROPERTY(bool largeFileMode READ largeFileMode WRITE setLargeFileMode NOTIFY largeFileModeChanged)
 
 public:
@@ -62,6 +65,13 @@ public:
     Q_INVOKABLE bool openFile(const QUrl &url);
     bool openPath(const QString &path);
     Q_INVOKABLE void closeFile();
+
+    /* Live capture, driven by CaptureSession: show a file dumpcap is
+     * writing, read the packets it reports, and finish when it stops. */
+    void startLive(const QString &path);
+    void continueLive(int new_packets);
+    void finishLive();
+    bool live() const { return live_; }
     Q_INVOKABLE QString formatCount(qint64 value) const;
 
     /* Display filters. checkFilter answers through filterChecked. */
@@ -125,6 +135,10 @@ signals:
     void detailsReady(const PacketDetails &details);
     void inventoryChanged();
     void largeFileModeChanged();
+    void liveChanged();
+    /* Rows added at the end of the displayed list (live capture). */
+    void displayedFramesAppended(int first, int count);
+    void displayedCountChanged();
 
 private slots:
     void onOpened(const QString &path, const QString &file_type, qint64 file_size, int generation);
@@ -138,6 +152,7 @@ private slots:
     void onFilterProgress(double progress);
     void onFilterApplied(const QString &text, const QVector<quint32> &frames, qint64 elapsed_ms, int generation);
     void onFilterFailed(const QString &text, const QString &message, int generation);
+    void onLiveProgress(int packets, const QVector<quint32> &new_displayed, const QString &duration, int generation);
 
 private:
     void setProgress(double progress);
@@ -168,6 +183,7 @@ private:
 
     int selected_frame_ = 0;
     bool large_file_mode_ = false;
+    bool live_ = false;
     HostInventorySnapshot inventory_;
 };
 

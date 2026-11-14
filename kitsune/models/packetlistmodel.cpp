@@ -32,6 +32,19 @@ PacketListModel::PacketListModel(CaptureEngine *engine, QObject *parent) :
     connect(engine_, &CaptureEngine::displayedFramesChanged, this, &PacketListModel::onDisplayedFramesChanged);
     connect(engine_, &CaptureEngine::fileChanged, this, &PacketListModel::onDisplayedFramesChanged);
     connect(engine_, &CaptureEngine::rowsReady, this, &PacketListModel::onRowsReady);
+    connect(engine_, &CaptureEngine::displayedFramesAppended, this, &PacketListModel::onDisplayedFramesAppended);
+}
+
+void PacketListModel::onDisplayedFramesAppended(int first, int count)
+{
+    const QVector<quint32> &all = engine_->displayedFrames();
+    if (first != frames_.size() || first + count > all.size()) {
+        onDisplayedFramesChanged();     /* out of step: start over */
+        return;
+    }
+    beginInsertRows(QModelIndex(), first, first + count - 1);
+    frames_ += all.mid(first, count);
+    endInsertRows();
 }
 
 int PacketListModel::rowCount(const QModelIndex &parent) const

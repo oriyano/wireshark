@@ -96,7 +96,8 @@ Rectangle {
         }
         Text {
             visible: captureEngine.hasFile && !captureEngine.loading
-            text: qsTr("Loaded in %1 s").arg((captureEngine.loadTimeMs / 1000).toFixed(2))
+            text: captureEngine.live ? qsTr("Live capture")
+                  : qsTr("Loaded in %1 s").arg((captureEngine.loadTimeMs / 1000).toFixed(2))
             color: Theme.textFaint
             font.pixelSize: Theme.fontSmall
         }

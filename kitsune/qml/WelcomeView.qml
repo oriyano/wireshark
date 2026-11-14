@@ -11,6 +11,7 @@ import QtQuick.Layouts
 Item {
     id: root
     signal openRequested()
+    signal captureRequested()
 
     DropArea {
         id: drop
@@ -53,29 +54,52 @@ Item {
                 Layout.maximumWidth: 440
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
-                text: qsTr("Drop a .pcap or .pcapng file here, or choose one. Kitsune reads every packet and shows you who is talking, what they say, and why it matters.")
+                text: qsTr("Drop a .pcap or .pcapng file here, choose one, or capture live traffic. Kitsune reads every packet and shows you who is talking, what they say, and why it matters.")
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontLarge
             }
-            Button {
-                id: openButton
+            RowLayout {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: 6
-                text: qsTr("Open capture file…")
-                onClicked: root.openRequested()
-                contentItem: Text {
-                    text: openButton.text
-                    color: Theme.onAccent
-                    font.pixelSize: Theme.fontLarge
-                    font.weight: Font.DemiBold
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+                spacing: 12
+                Button {
+                    id: openButton
+                    text: qsTr("Open capture file…")
+                    onClicked: root.openRequested()
+                    contentItem: Text {
+                        text: openButton.text
+                        color: Theme.onAccent
+                        font.pixelSize: Theme.fontLarge
+                        font.weight: Font.DemiBold
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        implicitWidth: 200
+                        implicitHeight: 42
+                        radius: Theme.radiusSmall + 2
+                        color: openButton.down ? Theme.accentStrong : Theme.accent
+                    }
                 }
-                background: Rectangle {
-                    implicitWidth: 200
-                    implicitHeight: 42
-                    radius: Theme.radiusSmall + 2
-                    color: openButton.down ? Theme.accentStrong : Theme.accent
+                Button {
+                    id: captureButton
+                    text: qsTr("Capture live…")
+                    onClicked: root.captureRequested()
+                    contentItem: Text {
+                        text: captureButton.text
+                        color: Theme.text
+                        font.pixelSize: Theme.fontLarge
+                        font.weight: Font.DemiBold
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        implicitWidth: 170
+                        implicitHeight: 42
+                        radius: Theme.radiusSmall + 2
+                        color: captureButton.hovered ? Theme.surfaceHover : Theme.surfaceRaised
+                        border.color: Theme.borderStrong
+                    }
                 }
             }
         }

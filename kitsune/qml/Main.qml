@@ -50,6 +50,15 @@ ApplicationWindow {
 
     Shortcut { sequence: StandardKey.Open; onActivated: window.openCapture() }
 
+    // Show the packets as soon as a live capture has its first file.
+    Connections {
+        target: captureEngine
+        function onLiveChanged() {
+            if (captureEngine.live && window.currentView === "capture")
+                window.currentView = "packets"
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: Theme.gap
@@ -90,11 +99,15 @@ ApplicationWindow {
                 StackLayout {
                     anchors.fill: parent
                     anchors.margins: 1
-                    currentIndex: !captureEngine.hasFile ? 0
+                    currentIndex: window.currentView === "capture" ? 4
+                                  : !captureEngine.hasFile ? 0
                                   : window.packetsView ? 1
                                   : window.currentView === "map" ? 2 : 3
 
-                    WelcomeView { onOpenRequested: window.openCapture() }
+                    WelcomeView {
+                        onOpenRequested: window.openCapture()
+                        onCaptureRequested: window.currentView = "capture"
+                    }
 
                     PacketsPage {
                         id: packetsPage
@@ -104,6 +117,8 @@ ApplicationWindow {
                     NetworkView { id: networkView }
 
                     PlaceholderView { view: window.currentView }
+
+                    CaptureView { onShowPacketsRequested: window.currentView = "packets" }
                 }
             }
         }
@@ -138,6 +153,13 @@ ApplicationWindow {
 
         Connections {
             target: captureEngine
+            function onErrorOccurred(message) {
+                toast.message = message
+                toastTimer.restart()
+            }
+        }
+        Connections {
+            target: captureSession
             function onErrorOccurred(message) {
                 toast.message = message
                 toastTimer.restart()

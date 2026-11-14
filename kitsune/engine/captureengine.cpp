@@ -130,6 +130,8 @@ CaptureEngine::CaptureEngine(QObject *parent) :
     connect(worker_, &EngineWorker::filterProgress, this, &CaptureEngine::onFilterProgress);
     connect(worker_, &EngineWorker::filterApplied, this, &CaptureEngine::onFilterApplied);
     connect(worker_, &EngineWorker::filterFailed, this, &CaptureEngine::onFilterFailed);
+    connect(worker_, &EngineWorker::liveProgress, this, &CaptureEngine::onLiveProgress);
+    connect(this, &CaptureEngine::displayedFramesChanged, this, &CaptureEngine::displayedCountChanged);
 
     thread_.start();
 }
@@ -200,6 +202,58 @@ bool CaptureEngine::openPath(const QString &path)
     return true;
 }
 
+void CaptureEngine::startLive(const QString &path)
+{
+    closeFile();
+    file_generation_++;
+    file_path_ = path;
+    live_ = true;
+    last_error_.clear();
+    emit fileChanged();
+    emit liveChanged();
+    QMetaObject::invokeMethod(worker_, "openLive", Qt::QueuedConnection, Q_ARG(QString, path), Q_ARG(int, file_generation_));
+}
+
+void CaptureEngine::continueLive(int new_packets)
+{
+    if (!live_) {
+        return;
+    }
+    QMetaObject::invokeMethod(worker_, "continueLive", Qt::QueuedConnection,
+                              Q_ARG(int, new_packets), Q_ARG(int, file_generation_));
+}
+
+void CaptureEngine::finishLive()
+{
+    if (!live_) {
+        return;
+    }
+    loading_ = true;    /* until the engine has read the rest and tidied up */
+    emit loadingChanged();
+    QMetaObject::invokeMethod(worker_, "finishLive", Qt::QueuedConnection, Q_ARG(int, file_generation_));
+}
+
+void CaptureEngine::onLiveProgress(int packets, const QVector<quint32> &new_displayed, const QString &duration, int generation)
+{
+    if (generation != file_generation_) {
+        return;
+    }
+    if (packets != packet_count_) {
+        packet_count_ = packets;
+        emit packetCountChanged();
+    }
+    if (duration != duration_) {
+        duration_ = duration;
+        emit loaded();      /* duration is notified with loaded */
+    }
+    if (!new_displayed.isEmpty() && !filtering_) {
+        const int first = static_cast<int>(displayed_.size());
+        displayed_ += new_displayed;
+        emit displayedFramesAppended(first, static_cast<int>(new_displayed.size()));
+        emit displayedCountChanged();
+    }
+}
+
 void CaptureEngine::closeFile()
 {
     worker_->cancel = true;
@@ -208,6 +262,10 @@ void CaptureEngine::closeFile()
     QMetaObject::invokeMethod(worker_, "closeFile", Qt::QueuedConnection);
 
     const bool had_file = !file_path_.isEmpty();
+    if (live_) {
+        live_ = false;
+        emit liveChanged();
+    }
     file_path_.clear();
     file_type_name_.clear();
     packet_count_ = 0;
@@ -275,12 +333,20 @@ void CaptureEngine::onLoaded(int packets, qint64 elapsed_ms, const QString &dura
     loading_ = false;
     setProgress(1.0);
 
-    displayed_.clear();
-    displayed_.reserve(packets);
-    for (int frame = 1; frame <= packets; frame++) {
-        displayed_.append(static_cast<quint32>(frame));
+    const bool was_live = live_;
+    if (live_) {
+        live_ = false;
+        emit liveChanged();
     }
-    filter_time_ms_ = 0;
+    /* A live capture kept its displayed list (and filter) up to date. */
+    if (!was_live || filter_text_.isEmpty()) {
+        displayed_.clear();
+        displayed_.reserve(packets);
+        for (int frame = 1; frame <= packets; frame++) {
+            displayed_.append(static_cast<quint32>(frame));
+        }
+        filter_time_ms_ = 0;
+    }
 
     emit packetCountChanged();
     emit loadingChanged();

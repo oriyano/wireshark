@@ -54,6 +54,8 @@ Item {
         "check":     "M5 12.5l4.5 4.5L19 7.5",
         "warning":   "M12 3l10 18H2z M12 10v4.5 M12 17.5v.5",
         "play":      "M7 4l13 8-13 8z",
+        "stop":      "M6 6h12v12H6z",
+        "refresh":   "M20 11a8 8 0 1 0-2.3 5.7 M20 4v7h-7",
         "ports":     "M5 8h14v8H5z M8 11v2 M11 11v2 M14 11v2 M17 11v2"
     })
 

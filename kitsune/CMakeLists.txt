@@ -8,7 +8,7 @@
 
 # Kitsune targets the current Qt 6 LTS. It builds with Qt 6.4 and
 # later; features from newer releases are enabled at run time.
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Network Qml Quick QuickControls2)
 if(Qt6_VERSION VERSION_LESS 6.5)
 	message(STATUS "Kitsune: building with Qt ${Qt6_VERSION}; Qt 6.5 or later is recommended")
 endif()
@@ -28,6 +28,10 @@ endif()
 
 set(KITSUNE_SRC
 	main.cpp
+	capture/capturesession.cpp
+	capture/capturesession.h
+	capture/syncpipe.cpp
+	capture/syncpipe.h
 	engine/captureengine.cpp
 	engine/captureengine.h
 	engine/enginetypes.h
@@ -67,6 +71,7 @@ set(KITSUNE_QML
 	qml/PacketBytesView.qml
 	qml/NetworkView.qml
 	qml/TopologyView.qml
+	qml/CaptureView.qml
 )
 # Serve the files next to the module's qmldir so that they see each
 # other, and the Theme singleton, on every Qt 6 version.
@@ -93,6 +98,7 @@ target_include_directories(kitsune PRIVATE
 target_link_libraries(kitsune PRIVATE
 	Qt6::Core
 	Qt6::Gui
+	Qt6::Network
 	Qt6::Qml
 	Qt6::Quick
 	Qt6::QuickControls2
@@ -125,6 +131,10 @@ find_package(Qt6 COMPONENTS Test QUIET)
 if(Qt6Test_FOUND)
 	qt_add_executable(kitsune_tests
 		tests/tst_hostinventory.cpp
+		tests/tst_syncpipe.cpp
+		tests/tests_main.cpp
+		capture/syncpipe.cpp
+		capture/syncpipe.h
 		engine/hostinventory.cpp
 		engine/hostinventory.h
 		engine/enginetypes.h

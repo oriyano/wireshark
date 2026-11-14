@@ -17,8 +17,15 @@ Item {
     readonly property int selectedRow: captureEngine.selectedFrame > 0 && modelRevision >= 0
                                         ? packetListModel.rowOfFrame(captureEngine.selectedFrame) : -1
     property int modelRevision: 0
+    property bool follow: true
     Connections {
         target: packetListModel
+        // During a live capture, keep the newest packets in view unless
+        // the user has scrolled away or picked a packet.
+        function onRowsInserted() {
+            if (captureEngine.live && root.follow && root.selectedRow < 0)
+                Qt.callLater(function() { table.positionViewAtRow(table.rows - 1, TableView.Contain) })
+        }
         function onModelReset() {
             root.modelRevision++
             if (root.selectedRow >= 0)
@@ -90,6 +97,7 @@ Item {
             columnWidthProvider: function(column) { return root.columnWidth(column) }
             rowHeightProvider: function() { return Theme.rowHeight + 4 }
             onWidthChanged: forceLayout()
+            onMovementEnded: root.follow = atYEnd
 
             ScrollBar.vertical: ScrollBar {
                 policy: ScrollBar.AsNeeded

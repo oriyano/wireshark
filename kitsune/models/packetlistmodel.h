@@ -59,6 +59,7 @@ signals:
 
 private slots:
     void onDisplayedFramesChanged();
+    void onDisplayedFramesAppended(int first, int count);
     void onRowsReady(const QVector<PacketRow> &rows);
     void flushRequests();
 
