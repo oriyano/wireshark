@@ -119,6 +119,7 @@ private:
     QHash<QString, quint32> mac_last_ip_;       /* MAC -> IPv4 it last sent from */
     QVector<int> last_layer_;                   /* per host: protocol id last recorded */
     QSet<quint64> syn_seen_;                    /* host + handshake fingerprint */
+    QHash<QString, ProtocolShare> protocol_totals_;
 };
 
 #endif // KITSUNE_HOSTINVENTORY_H

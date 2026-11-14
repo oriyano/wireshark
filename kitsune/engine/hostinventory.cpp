@@ -9,6 +9,7 @@
 
 #include "hostinventory.h"
 
+#include <algorithm>
 #include <cstdio>
 
 #include <QMap>
@@ -98,6 +99,7 @@ void HostInventory::clear()
     mac_last_ip_.clear();
     last_layer_.clear();
     syn_seen_.clear();
+    protocol_totals_.clear();
     by_ipv6_.clear();
     mac_ipv4s_.clear();
     ipv4_mac_.clear();
@@ -564,6 +566,11 @@ void HostInventory::addPacket(epan_dissect_t *edt, const frame_data *fdata, cons
     const LayerInfo *layer = topLayer(pinfo);
     const QString &top_upper = layer->upper;
     const bool top_is_lower = layer->id < 0 || layer->lower;
+    if (layer->id >= 0) {
+        ProtocolShare &total = protocol_totals_[top_upper];
+        total.packets++;
+        total.bytes += length;
+    }
     const QString mac = addressText(pinfo->dl_src);
 
     /* ARP tells us which IPv4 address owns a MAC. */
@@ -982,6 +989,14 @@ void HostInventory::chooseOs(HostRecord &host)
 HostInventorySnapshot HostInventory::snapshot() const
 {
     HostInventorySnapshot snap;
+    for (auto it = protocol_totals_.constBegin(); it != protocol_totals_.constEnd(); ++it) {
+        ProtocolShare share = it.value();
+        share.name = it.key();
+        snap.protocols.append(share);
+    }
+    std::sort(snap.protocols.begin(), snap.protocols.end(), [](const ProtocolShare &a, const ProtocolShare &b) {
+        return a.bytes != b.bytes ? a.bytes > b.bytes : a.name < b.name;
+    });
     for (const HostRecord &host : hosts_) {
         /* DHCP clients without an address yet send from 0.0.0.0. */
         if (host.ipv4 != QLatin1String("0.0.0.0")) {

@@ -70,6 +70,66 @@ QString SubnetListModel::suggestedName(const QString &cidr) const
     return QString();
 }
 
+QVariantMap SubnetListModel::gateway() const
+{
+    const QVector<HostRecord> &hosts = engine_->inventory().hosts;
+    const HostRecord *best = nullptr;
+    for (const HostRecord &h : hosts) {
+        if (h.isRouter && (!best || h.packetsSent + h.packetsReceived > best->packetsSent + best->packetsReceived)) {
+            best = &h;
+        }
+    }
+    if (!best) {
+        return QVariantMap();
+    }
+    return {
+        { QStringLiteral("name"), best->name.isEmpty() ? best->ipv4 : best->name },
+        { QStringLiteral("ipv4"), best->ipv4 },
+        { QStringLiteral("subnet"), best->subnet },
+        { QStringLiteral("vendor"), best->vendor }
+    };
+}
+
+QVariantList SubnetListModel::topProtocols(int count) const
+{
+    const QVector<ProtocolShare> &protocols = engine_->inventory().protocols;
+    quint64 total = 0;
+    for (const ProtocolShare &p : protocols) {
+        total += p.bytes;
+    }
+    QVariantList out;
+    quint64 shown = 0;
+    for (int i = 0; i < protocols.size() && i < count; i++) {
+        shown += protocols[i].bytes;
+        out << QVariantMap { { QStringLiteral("name"), protocols[i].name },
+                             { QStringLiteral("share"), total ? double(protocols[i].bytes) / double(total) : 0.0 } };
+    }
+    if (protocols.size() > count && total) {
+        out << QVariantMap { { QStringLiteral("name"), tr("Other") },
+                             { QStringLiteral("share"), double(total - shown) / double(total) } };
+    }
+    return out;
+}
+
+QVariantMap SubnetListModel::totals() const
+{
+    const HostInventorySnapshot &inv = engine_->inventory();
+    int services = 0;
+    QSet<QString> os_types, vendors;
+    for (const HostRecord &h : inv.hosts) {
+        services += static_cast<int>(h.services.size());
+        if (!h.os.isEmpty()) os_types.insert(h.os);
+        if (!h.vendor.isEmpty()) vendors.insert(h.vendor);
+    }
+    return {
+        { QStringLiteral("hosts"), static_cast<int>(inv.hosts.size()) },
+        { QStringLiteral("services"), services },
+        { QStringLiteral("osTypes"), static_cast<int>(os_types.size()) },
+        { QStringLiteral("protocols"), static_cast<int>(inv.protocols.size()) },
+        { QStringLiteral("vendors"), static_cast<int>(vendors.size()) }
+    };
+}
+
 void SubnetListModel::onInventoryChanged()
 {
     beginResetModel();

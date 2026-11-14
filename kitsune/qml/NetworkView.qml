@@ -18,6 +18,8 @@ Item {
     property int hostRow: -1
     property var host: hostRow >= 0 ? subnetHostModel.host(hostRow) : ({})
     property int namesRevision: 0
+    // The map first; choosing a network opens its host list.
+    property bool showTopology: true
 
     // Host table columns; the optional ones drop out when space is short.
     readonly property int ipWidth: 120
@@ -28,6 +30,7 @@ Item {
     readonly property bool showTraffic: hostList.width > 820
 
     onSubnetChanged: { subnetHostModel.subnet = subnet; hostRow = -1 }
+    onHostRowChanged: if (hostRow >= 0) showTopology = false
     Component.onCompleted: subnetHostModel.subnet = subnet
 
     Connections {
@@ -115,9 +118,60 @@ Item {
         font.pixelSize: Theme.fontLarge
     }
 
-    RowLayout {
+    // View switcher
+    Rectangle {
+        id: viewBar
         visible: subnetModel.count > 0
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 52
+        color: Theme.surface
+        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.border }
+        Row {
+            anchors.left: parent.left
+            anchors.leftMargin: 12
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 4
+            Repeater {
+                model: [ { label: qsTr("Topology"), topology: true }, { label: qsTr("Networks and hosts"), topology: false } ]
+                Rectangle {
+                    required property var modelData
+                    readonly property bool active: modelData.topology === root.showTopology
+                    width: tabText.implicitWidth + 28
+                    height: 32
+                    radius: Theme.radiusSmall
+                    color: active ? Theme.accentSoft : tabHover.hovered ? Theme.surfaceHover : "transparent"
+                    border.color: active ? Theme.accent : "transparent"
+                    Text {
+                        id: tabText
+                        anchors.centerIn: parent
+                        text: parent.modelData.label
+                        color: parent.active ? Theme.text : Theme.textMuted
+                        font.pixelSize: Theme.fontBody
+                        font.weight: parent.active ? Font.DemiBold : Font.Normal
+                    }
+                    HoverHandler { id: tabHover }
+                    TapHandler { onTapped: root.showTopology = parent.modelData.topology }
+                }
+            }
+        }
+    }
+
+    TopologyView {
+        visible: subnetModel.count > 0 && root.showTopology
+        anchors.top: viewBar.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        onSubnetChosen: (cidr) => { root.subnet = cidr; root.showTopology = false }
+    }
+
+    RowLayout {
+        visible: subnetModel.count > 0 && !root.showTopology
+        anchors.top: viewBar.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
         spacing: 0
 
         // ---------------------------------------------------------- subnets

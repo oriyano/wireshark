@@ -66,6 +66,7 @@ set(KITSUNE_QML
 	qml/PacketDetailsView.qml
 	qml/PacketBytesView.qml
 	qml/NetworkView.qml
+	qml/TopologyView.qml
 )
 # Serve the files next to the module's qmldir so that they see each
 # other, and the Theme singleton, on every Qt 6 version.

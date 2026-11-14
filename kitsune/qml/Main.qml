@@ -35,7 +35,7 @@ ApplicationWindow {
     // The details tree fills in after the packet is dissected.
     Timer { id: detailsTimer; interval: 300; onTriggered: packetsPage.details.select(window.detailsRow) }
     onFilterDraftChanged: packetsPage.filterBar.setText(filterDraft)
-    onMapSubnetChanged: networkView.subnet = mapSubnet
+    onMapSubnetChanged: { networkView.subnet = mapSubnet; networkView.showTopology = false }
     onMapHostRowChanged: networkView.hostRow = mapHostRow
 
     function openCapture() { openDialog.open() }

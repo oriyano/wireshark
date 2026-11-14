@@ -10,6 +10,7 @@
 #define KITSUNE_HOSTMODELS_H
 
 #include <QAbstractListModel>
+#include <QVariantList>
 #include <QVariantMap>
 
 #include "engine/enginetypes.h"
@@ -31,6 +32,11 @@ public:
     QHash<int, QByteArray> roleNames() const override;
     int count() const { return static_cast<int>(subnets_.size()); }
     Q_INVOKABLE QString suggestedName(const QString &cidr) const;
+
+    /* For the topology map. */
+    Q_INVOKABLE QVariantMap gateway() const;              /* name, ipv4, subnet; empty if none */
+    Q_INVOKABLE QVariantList topProtocols(int count) const; /* name, share (0-1) */
+    Q_INVOKABLE QVariantMap totals() const;               /* hosts, services, osTypes, protocols, vendors */
 
 signals:
     void countChanged();

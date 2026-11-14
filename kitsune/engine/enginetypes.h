@@ -97,9 +97,16 @@ struct SubnetRecord {
     QStringList osFamilies;
 };
 
+struct ProtocolShare {
+    QString name;           /* "HTTP", "TCP", ... (highest layer found) */
+    quint64 bytes = 0;
+    quint64 packets = 0;
+};
+
 struct HostInventorySnapshot {
     QVector<HostRecord> hosts;
     QVector<SubnetRecord> subnets;
+    QVector<ProtocolShare> protocols;   /* by bytes, largest first */
 };
 
 Q_DECLARE_METATYPE(PacketRow)
