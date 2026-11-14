@@ -1,0 +1,347 @@
+name: Kitsune
+
+# Builds the Kitsune QML interface on Linux and Windows, checks that it
+# opens a synthetic capture, and fuzzes the dissectors with traffic from
+# the synthetic capture generator.
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      fuzz_seconds:
+        description: Seconds to spend on each fuzz target
+        required: false
+        default: "600"
+  schedule:
+    # Nightly, with a longer fuzz run.
+    - cron: '17 3 * * *'
+
+concurrency:
+  group: kitsune-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Short on pushes, longer when run by hand or on the nightly schedule.
+  FUZZ_SECONDS: ${{ github.event.inputs.fuzz_seconds || (github.event_name == 'schedule' && '1200') || '120' }}
+
+jobs:
+  linux:
+    name: Linux (Qt 6 from apt)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install deps
+        run: |
+          sudo tools/os_setup/debian-setup.sh -y
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build ccache xvfb xauth \
+            qt6-declarative-dev \
+            qml6-module-qtquick qml6-module-qtquick-controls \
+            qml6-module-qtquick-dialogs qml6-module-qtquick-layouts \
+            qml6-module-qtquick-shapes qml6-module-qtquick-templates \
+            qml6-module-qtquick-window qml6-module-qtqml-workerscript \
+            qml6-module-qtcore qml6-module-qt-labs-folderlistmodel
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: kitsune-linux
+          max-size: 2G
+      - name: CMake
+        run: >-
+          cmake -S . -B build -GNinja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          -DBUILD_kitsune=ON
+          -DBUILD_wireshark=OFF
+      - name: Build
+        run: ninja -C build kitsune tshark
+      - name: Make synthetic capture
+        run: python3 kitsune/tools/make_synthetic_capture.py office-200k.pcap 200000
+      - name: Benchmark
+        run: QT_QPA_PLATFORM=offscreen build/run/kitsune --bench office-200k.pcap
+      - name: Screenshots
+        run: |
+          mkdir screenshots
+          for theme in dark light system; do
+            QT_QUICK_BACKEND=software xvfb-run -a -s "-screen 0 1600x1000x24" \
+              build/run/kitsune --theme "$theme" --screenshot "screenshots/packets-$theme.png" office-200k.pcap
+            test -s "screenshots/packets-$theme.png"
+          done
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: kitsune-linux-screenshots
+          path: screenshots
+          if-no-files-found: ignore
+
+  windows:
+    name: Windows (Qt 6.12, MSVC)
+    runs-on: windows-2022
+    timeout-minutes: 120
+    env:
+      PLATFORM: x64
+      WIRESHARK_BASE_DIR: C:/wireshark-libs
+      QT_VERSION: 6.12.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Choco install
+        run: choco install -y --force --no-progress xsltproc
+      # aqtinstall (behind install-qt-action) does not yet understand the
+      # per-compiler repository layout that Qt 6.12 uses
+      # (qt6_6120/qt6_6120_msvc2022_64/), so fetch the base package from
+      # Qt's online repository directly and check each archive's SHA-1.
+      - name: Cache Qt
+        id: cache-qt
+        uses: actions/cache@v4
+        with:
+          path: C:\Qt
+          key: qt-${{ env.QT_VERSION }}-msvc2022_64-v1
+      - name: Install Qt
+        if: steps.cache-qt.outputs.cache-hit != 'true'
+        shell: python
+        env:
+          QT_DIR: C:\Qt
+        run: |
+          import hashlib, os, subprocess, urllib.request
+          import xml.etree.ElementTree as ET
+
+          ver = os.environ["QT_VERSION"]
+          tag = ver.replace(".", "")
+          repo = ("https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/"
+                  f"qt6_{tag}/qt6_{tag}_msvc2022_64/")
+          wanted = f"qt.qt6.{tag}.win64_msvc2022_64"
+
+          def fetch(url):
+              with urllib.request.urlopen(url, timeout=120) as r:
+                  return r.read()
+
+          updates = ET.fromstring(fetch(repo + "Updates.xml"))
+          pkg = next(p for p in updates.iter("PackageUpdate") if p.findtext("Name") == wanted)
+          version = pkg.findtext("Version")
+          archives = [a.strip() for a in pkg.findtext("DownloadableArchives").split(",") if a.strip()]
+          os.makedirs(os.environ["QT_DIR"], exist_ok=True)
+          for archive in archives:
+              url = f"{repo}{wanted}/{version}{archive}"
+              print("Downloading", url, flush=True)
+              data = fetch(url)
+              expected = fetch(url + ".sha1").decode().split()[0]
+              if hashlib.sha1(data).hexdigest() != expected:
+                  raise SystemExit(f"SHA-1 mismatch for {archive}")
+              path = os.path.join(os.environ["RUNNER_TEMP"], archive)
+              with open(path, "wb") as f:
+                  f.write(data)
+              subprocess.run(["7z", "x", "-y", "-bd", "-o" + os.environ["QT_DIR"], path],
+                             check=True, stdout=subprocess.DEVNULL)
+              os.remove(path)
+      - name: Set Qt paths
+        shell: bash
+        run: |
+          # Archives from the per-compiler repository may or may not carry
+          # a <version>/<arch>/ prefix, so find the kit by its CMake package.
+          config="$(find /c/Qt -path '*/lib/cmake/Qt6/Qt6Config.cmake' -print -quit)"
+          if [ -z "$config" ]; then ls -R /c/Qt | head -40; exit 1; fi
+          qt_root="$(cygpath -w "${config%/lib/cmake/Qt6/Qt6Config.cmake}")"
+          echo "Qt kit: $qt_root"
+          echo "QT_ROOT_DIR=$qt_root" >> "$GITHUB_ENV"
+          echo "$qt_root\\bin" >> "$GITHUB_PATH"
+      - name: Set MSVC command prompt
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: x64
+      - name: CMake
+        # Newer MSVC releases warn on upstream code (wiretap/blf.c C4815),
+        # so warnings stay warnings here.
+        run: >-
+          cmake -S . -B build
+          -G "Visual Studio 17 2022" -A x64
+          -DCMAKE_SYSTEM_VERSION="10.0.20348.0"
+          -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
+          -DBUILD_kitsune=ON
+          -DBUILD_wireshark=OFF
+          -DENABLE_WERROR=OFF
+      - name: Build
+        run: cmake --build build --config RelWithDebInfo --target kitsune tshark --parallel
+      - name: Deploy Qt
+        # windeployqt only ships the "windows" platform plugin; the checks
+        # below run headless, so add "offscreen" too.
+        run: |
+          windeployqt --release --qmldir kitsune/qml build/run/RelWithDebInfo/kitsune.exe
+          Copy-Item "$env:QT_ROOT_DIR/plugins/platforms/qoffscreen.dll" build/run/RelWithDebInfo/platforms/
+      - name: Turn off crash dialogs
+        # A crash would otherwise wait on a Windows Error Reporting dialog
+        # that nobody can close.
+        run: |
+          New-Item -Force -Path 'HKCU:\Software\Microsoft\Windows\Windows Error Reporting' | Out-Null
+          Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\Windows Error Reporting' -Name DontShowUI -Value 1
+      - name: Make synthetic capture
+        run: python kitsune/tools/make_synthetic_capture.py office-200k.pcap 200000
+      - name: Benchmark
+        timeout-minutes: 10
+        # kitsune.exe is a GUI-subsystem program; piping its output makes
+        # PowerShell wait for it and show what it prints.
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          & build/run/RelWithDebInfo/kitsune.exe --bench office-200k.pcap | Out-Host
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Screenshots
+        timeout-minutes: 10
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: |
+          New-Item -ItemType Directory -Force screenshots | Out-Null
+          foreach ($theme in 'dark', 'light', 'system') {
+            & build/run/RelWithDebInfo/kitsune.exe --theme $theme --screenshot "screenshots/packets-$theme.png" office-200k.pcap | Out-Host
+            if (-not (Test-Path "screenshots/packets-$theme.png")) { throw "No $theme screenshot" }
+          }
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: kitsune-windows-screenshots
+          path: screenshots
+          if-no-files-found: ignore
+      - name: Upload Kitsune build
+        uses: actions/upload-artifact@v6
+        with:
+          name: kitsune-windows-x64
+          path: |
+            build/run/RelWithDebInfo
+            !build/run/RelWithDebInfo/**/*.pdb
+            !build/run/RelWithDebInfo/**/*.ilk
+
+  fuzz:
+    name: Fuzz (fuzzshark, ASan + UBSan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install deps
+        run: |
+          sudo tools/os_setup/debian-setup.sh -y
+          sudo apt-get install -y --no-install-recommends ninja-build ccache clang libclang-rt-18-dev
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: kitsune-fuzz
+          max-size: 2G
+      - name: CMake
+        run: >-
+          cmake -S . -B build -GNinja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          -DENABLE_FUZZER=ON
+          -DENABLE_ASAN=ON
+          -DENABLE_UBSAN=ON
+          -DBUILD_fuzzshark=ON
+          -DBUILD_wireshark=OFF
+      - name: Build
+        run: ninja -C build fuzzshark tshark editcap capinfos
+      - name: Make synthetic captures
+        run: |
+          mkdir captures
+          for seed in 1 2 3; do
+            python3 kitsune/tools/make_synthetic_capture.py "captures/office-seed$seed.pcap" 20000 "$seed"
+          done
+      - name: Make fuzz corpora
+        # One corpus per fuzz target, cut from the synthetic captures:
+        # whole Ethernet frames, IPv4 packets, and DNS, HTTP and SSH payloads.
+        run: |
+          python3 - captures/*.pcap <<'EOF'
+          import os, random, struct, sys
+
+          corpora = {name: set() for name in ("eth", "ip", "dns", "http", "ssh")}
+          for path in sys.argv[1:]:
+              with open(path, "rb") as f:
+                  data = f.read()
+              endian = "<" if data[:4] == b"\xd4\xc3\xb2\xa1" else ">"
+              pos = 24
+              while pos + 16 <= len(data):
+                  incl = struct.unpack(endian + "I", data[pos + 8:pos + 12])[0]
+                  frame = data[pos + 16:pos + 16 + incl]
+                  pos += 16 + incl
+                  corpora["eth"].add(frame)
+                  if len(frame) < 34 or frame[12:14] != b"\x08\x00":
+                      continue
+                  ip = frame[14:]
+                  corpora["ip"].add(ip)
+                  ihl = (ip[0] & 0x0F) * 4
+                  proto, l4 = ip[9], ip[ihl:]
+                  if proto == 17 and len(l4) > 8:
+                      sport, dport = struct.unpack("!HH", l4[:4])
+                      if 53 in (sport, dport):
+                          corpora["dns"].add(l4[8:])
+                  elif proto == 6 and len(l4) >= 20:
+                      sport, dport = struct.unpack("!HH", l4[:4])
+                      payload = l4[(l4[12] >> 4) * 4:]
+                      if not payload:
+                          continue
+                      if {80, 8080} & {sport, dport}:
+                          corpora["http"].add(payload)
+                      elif 22 in (sport, dport):
+                          corpora["ssh"].add(payload)
+
+          for name, items in corpora.items():
+              os.makedirs(f"corpus/{name}", exist_ok=True)
+              # A few hundred distinct seeds per target is plenty.
+              items = sorted(items)
+              items = random.Random(0).sample(items, min(len(items), 500))
+              for index, item in enumerate(items):
+                  with open(f"corpus/{name}/seed-{index:04d}", "wb") as out:
+                      out.write(item)
+              print(f"{name}: {len(items)} seeds")
+          EOF
+      - name: Fuzz dissectors with libFuzzer
+        run: |
+          mkdir -p crashes
+          status=0
+          run_target() {
+            name=$1; shift
+            echo "::group::fuzzshark $name ($FUZZ_SECONDS s)"
+            if ! env "$@" build/run/fuzzshark \
+                -max_total_time="$FUZZ_SECONDS" -timeout=25 -rss_limit_mb=4096 \
+                -print_final_stats=1 -artifact_prefix="crashes/$name-" "corpus/$name"; then
+              echo "::error::fuzzshark found a problem in $name"
+              status=1
+            fi
+            echo "::endgroup::"
+          }
+          run_target eth  FUZZSHARK_TARGET=eth_withoutfcs
+          run_target ip   FUZZSHARK_TARGET=ip
+          run_target dns  FUZZSHARK_TABLE=udp.port FUZZSHARK_TARGET=dns
+          run_target http FUZZSHARK_TABLE=tcp.port FUZZSHARK_TARGET=http
+          run_target ssh  FUZZSHARK_TABLE=tcp.port FUZZSHARK_TARGET=ssh
+          exit $status
+      - name: Fuzz whole captures with tshark
+        if: always()
+        run: |
+          mkdir -p fuzz-tmp
+          tools/fuzz-test.sh -a -b build/run -d fuzz-tmp -t "$FUZZ_SECONDS" captures/*.pcap
+      - name: Upload crashes
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: kitsune-fuzz-crashes
+          path: |
+            crashes
+            fuzz-tmp
+          if-no-files-found: ignore
