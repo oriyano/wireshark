@@ -26,6 +26,7 @@
 #include <epan/epan_dissect.h>
 #include <epan/frame_data_sequence.h>
 #include <epan/packet.h>
+#include <epan/prefs.h>
 #include <epan/proto.h>
 #include <epan/secrets.h>
 #include <epan/tvbuff.h>
@@ -66,6 +67,20 @@ EngineWorker::EngineWorker(QObject *parent) :
 EngineWorker::~EngineWorker()
 {
     closeFile();
+}
+
+void EngineWorker::setLargeFileMode(bool on)
+{
+    /* TCP's per-segment analysis (retransmissions, lost segments, bytes
+     * in flight) is most of the engine's memory on a large capture. */
+    QByteArray pref = on ? QByteArrayLiteral("tcp.analyze_sequence_numbers:FALSE")
+                         : QByteArrayLiteral("tcp.analyze_sequence_numbers:TRUE");
+    char *errmsg = nullptr;
+    if (prefs_set_pref(pref.data(), &errmsg) != PREFS_SET_OK) {
+        qWarning("kitsune: could not set %s: %s", pref.constData(), errmsg ? errmsg : "unknown error");
+    }
+    g_free(errmsg);
+    prefs_apply_all();
 }
 
 void EngineWorker::openFile(const QString &path, int generation)

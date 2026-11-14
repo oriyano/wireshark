@@ -45,6 +45,9 @@ public:
 
 public slots:
     void openFile(const QString &path, int generation);
+    /* Large-file mode: turn TCP sequence analysis off to save memory.
+     * Takes effect from the next file opened. */
+    void setLargeFileMode(bool on);
     void closeFile();
     void requestRows(const QVector<quint32> &frames, int generation);
     void requestDetails(quint32 frame, int generation);

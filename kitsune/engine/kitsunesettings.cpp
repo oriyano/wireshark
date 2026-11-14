@@ -79,3 +79,17 @@ bool KitsuneSettings::systemPrefersDark() const
     const QPalette palette = QGuiApplication::palette();
     return palette.color(QPalette::Window).lightness() < palette.color(QPalette::WindowText).lightness();
 }
+
+bool KitsuneSettings::largeFileMode() const
+{
+    return settings_.value(QStringLiteral("engine/largeFileMode"), false).toBool();
+}
+
+void KitsuneSettings::setLargeFileMode(bool on)
+{
+    if (on == largeFileMode()) {
+        return;
+    }
+    settings_.setValue(QStringLiteral("engine/largeFileMode"), on);
+    emit largeFileModeChanged();
+}

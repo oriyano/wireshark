@@ -102,5 +102,46 @@ Rectangle {
         }
 
         Item { Layout.fillWidth: true }
+
+        // Large-file mode: less memory, no TCP analysis flags.
+        RowLayout {
+            id: largeFile
+            spacing: 8
+            HoverHandler { id: largeHover }
+            ToolTip.visible: largeHover.hovered
+            ToolTip.delay: 400
+            ToolTip.text: captureEngine.largeFileMode
+                ? qsTr("Large-file mode is on: about a third less memory, but TCP retransmission, lost-segment and other sequence analysis flags are not shown. Turning it off reloads the file.")
+                : qsTr("Large-file mode uses about a third less memory on very large captures by skipping TCP sequence analysis (retransmission and lost-segment flags). Turning it on reloads the file.")
+
+            Text {
+                text: qsTr("Large-file mode")
+                color: captureEngine.largeFileMode ? Theme.warning : Theme.textMuted
+                font.pixelSize: Theme.fontSmall
+                font.weight: captureEngine.largeFileMode ? Font.DemiBold : Font.Normal
+            }
+            // A small switch drawn from theme tokens.
+            Rectangle {
+                id: track
+                implicitWidth: 36
+                implicitHeight: 20
+                radius: 10
+                color: captureEngine.largeFileMode ? Theme.warning : Theme.border
+                Rectangle {
+                    width: 16; height: 16; radius: 8
+                    y: 2
+                    x: captureEngine.largeFileMode ? parent.width - width - 2 : 2
+                    color: Theme.surface
+                    Behavior on x { NumberAnimation { duration: 120 } }
+                }
+                TapHandler {
+                    enabled: !captureEngine.loading
+                    onTapped: kitsuneSettings.largeFileMode = !captureEngine.largeFileMode
+                }
+                Accessible.role: Accessible.CheckBox
+                Accessible.name: qsTr("Large-file mode")
+                Accessible.checked: captureEngine.largeFileMode
+            }
+        }
     }
 }

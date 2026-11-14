@@ -46,6 +46,11 @@ class CaptureEngine : public QObject
 
     Q_PROPERTY(int selectedFrame READ selectedFrame NOTIFY selectedFrameChanged)
 
+    /* Large-file mode trades TCP analysis (retransmission and
+     * lost-segment flags) for about a third less memory. Changing it
+     * reloads the open file. */
+    Q_PROPERTY(bool largeFileMode READ largeFileMode WRITE setLargeFileMode NOTIFY largeFileModeChanged)
+
 public:
     explicit CaptureEngine(QObject *parent = nullptr);
     ~CaptureEngine() override;
@@ -83,6 +88,8 @@ public:
     int displayedCount() const { return static_cast<int>(displayed_.size()); }
     qint64 filterTimeMs() const { return filter_time_ms_; }
     int selectedFrame() const { return selected_frame_; }
+    bool largeFileMode() const { return large_file_mode_; }
+    void setLargeFileMode(bool on);
 
     const QVector<quint32> &displayedFrames() const { return displayed_; }
     const HostInventorySnapshot &inventory() const { return inventory_; }
@@ -117,6 +124,7 @@ signals:
     void selectedFrameChanged();
     void detailsReady(const PacketDetails &details);
     void inventoryChanged();
+    void largeFileModeChanged();
 
 private slots:
     void onOpened(const QString &path, const QString &file_type, qint64 file_size, int generation);
@@ -159,6 +167,7 @@ private:
     QVector<quint32> displayed_;
 
     int selected_frame_ = 0;
+    bool large_file_mode_ = false;
     HostInventorySnapshot inventory_;
 };
 

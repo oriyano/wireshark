@@ -48,6 +48,7 @@ run `windeployqt --qmldir <source>/kitsune/qml run/kitsune.exe`.
 | `--select <n>`            | Select packet `n` once the file loads                           |
 | `--details-row <row>`     | Select a row of the packet details tree                         |
 | `--subnet <cidr>`, `--host <row>` | Open a subnet, and a host in it, in the network view    |
+| `--large-file-mode on\|off` | Override the saved large-file mode setting for this run       |
 | `--screenshot <png>`      | Save a picture of the window once the file loads, then exit     |
 
 ## Tests
@@ -86,6 +87,15 @@ responses, NetBIOS, SMB, and payloads that start like HTTP or SSH).
 TCP handshake options are read straight from the bytes. Everything
 else only adds to traffic counts, which come from the engine without
 a tree.
+
+### Large-file mode
+
+TCP sequence analysis (retransmissions, lost segments, bytes in flight)
+holds most of the engine's memory on a large capture. Large-file mode,
+a switch in the file bar, turns it off: on 1M synthetic packets peak
+memory drops from 1,510 MiB to 1,067 MiB. The analysis flags are not
+available while it's on, so it is off by default. Changing it reloads
+the open file.
 
 ## Layout
 

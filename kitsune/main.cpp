@@ -30,10 +30,11 @@
 #include "models/packetdetailsmodel.h"
 #include "models/packetlistmodel.h"
 
-static int runBenchmark(const QString &path, const QString &filter)
+static int runBenchmark(const QString &path, const QString &filter, bool large_file_mode)
 {
     QTextStream out(stdout);
     CaptureEngine engine;
+    engine.setLargeFileMode(large_file_mode);
     PacketListModel model(&engine);
     model.setSynchronous(true);
 
@@ -83,6 +84,7 @@ static int runBenchmark(const QString &path, const QString &filter)
 
     out << "file:               " << engine.fileName() << " (" << engine.fileTypeName() << ")" << Qt::endl;
     out << "packets:            " << engine.packetCount() << Qt::endl;
+    out << "large-file mode:    " << (engine.largeFileMode() ? "on" : "off") << Qt::endl;
     out << "first pass:         " << first_pass_ms << " ms" << Qt::endl;
     out << "first screen:       " << first_screen_ms << " ms (" << visible_rows << " rows)" << Qt::endl;
     out << "full scroll:        " << scroll_ms << " ms (" << QString::number(per_row_us, 'f', 1) << " us/row)" << Qt::endl;
@@ -99,10 +101,11 @@ static int runBenchmark(const QString &path, const QString &filter)
 }
 
 /* Print the host inventory, for checking discovery from the command line. */
-static int runInventory(const QString &path)
+static int runInventory(const QString &path, bool large_file_mode)
 {
     QTextStream out(stdout);
     CaptureEngine engine;
+    engine.setLargeFileMode(large_file_mode);
     QEventLoop loop;
     QObject::connect(&engine, &CaptureEngine::loaded, &loop, &QEventLoop::quit);
     QObject::connect(&engine, &CaptureEngine::errorOccurred, &loop, &QEventLoop::quit);
@@ -177,6 +180,9 @@ int main(int argc, char *argv[])
     QCommandLineOption host_option(QStringLiteral("host"),
                                    QStringLiteral("In the network view, open the host at <row>."), QStringLiteral("row"));
     parser.addOption(host_option);
+    QCommandLineOption large_file_option(QStringLiteral("large-file-mode"),
+                                         QStringLiteral("Use large-file mode for this run: on or off."), QStringLiteral("on|off"));
+    parser.addOption(large_file_option);
     QCommandLineOption theme_option(QStringLiteral("theme"),
                                     QStringLiteral("Use <mode> for this run: system, light or dark."),
                                     QStringLiteral("mode"));
@@ -190,12 +196,19 @@ int main(int argc, char *argv[])
     }
 
     const QStringList files = parser.positionalArguments();
+    /* Large-file mode: the command line wins over the saved setting. */
+    bool large_file_mode;
+    {
+        KitsuneSettings saved;
+        large_file_mode = parser.isSet(large_file_option) ? parser.value(large_file_option) == QLatin1String("on")
+                                                          : saved.largeFileMode();
+    }
     if (parser.isSet(bench_option)) {
         if (files.isEmpty()) {
             std::fprintf(stderr, "kitsune: --bench needs a capture file\n");
             return 1;
         }
-        int ret = runBenchmark(files.first(), parser.value(filter_option));
+        int ret = runBenchmark(files.first(), parser.value(filter_option), large_file_mode);
         CaptureEngine::cleanupLibraries();
         return ret;
     }
@@ -205,7 +218,7 @@ int main(int argc, char *argv[])
             std::fprintf(stderr, "kitsune: --inventory needs a capture file\n");
             return 1;
         }
-        int ret = runInventory(files.first());
+        int ret = runInventory(files.first(), large_file_mode);
         CaptureEngine::cleanupLibraries();
         return ret;
     }
@@ -222,6 +235,12 @@ int main(int argc, char *argv[])
         HostListModel hosts(&engine);
         HostListModel subnet_hosts(&engine);
         KitsuneSettings settings;
+        engine.setLargeFileMode(large_file_mode);
+        if (!parser.isSet(large_file_option)) {
+            /* The switch in the interface changes the saved setting. */
+            QObject::connect(&settings, &KitsuneSettings::largeFileModeChanged, &engine,
+                             [&engine, &settings]() { engine.setLargeFileMode(settings.largeFileMode()); });
+        }
 
         if (parser.isSet(theme_option)) {
             const QString mode = parser.value(theme_option);

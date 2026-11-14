@@ -165,6 +165,21 @@ QString CaptureEngine::columnTitle(int column) const
     return QString::fromUtf8(get_column_title(column));
 }
 
+void CaptureEngine::setLargeFileMode(bool on)
+{
+    if (on == large_file_mode_) {
+        return;
+    }
+    large_file_mode_ = on;
+    QMetaObject::invokeMethod(worker_, "setLargeFileMode", Qt::QueuedConnection, Q_ARG(bool, on));
+    emit largeFileModeChanged();
+    /* The setting changes how the first pass dissects, so reload. */
+    if (hasFile()) {
+        const QString path = file_path_;
+        openPath(path);
+    }
+}
+
 bool CaptureEngine::openFile(const QUrl &url)
 {
     return openPath(url.isLocalFile() ? url.toLocalFile() : url.toString());
